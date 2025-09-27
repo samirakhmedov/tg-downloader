@@ -1,0 +1,117 @@
+@go.Package{ name = "tg-downloader/env" }
+module TGDownloader
+
+import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.11.1#/go.pkl"
+
+/// Configuration for Telegram Bot API integration
+class TgBotConfiguration {
+  /// Telegram Bot API token - required for bot authentication with Telegram servers
+  /// Format: <bot_id>:<auth_token> (obtained from @BotFather)
+  tgBotApiKey: String(isValid)
+
+  /// Polling timeout in seconds - how long to wait for new updates (0 = no timeout)
+  /// Higher values reduce API calls but increase response latency
+  updateTimeout: Int(this > -1)
+
+  /// Maximum number of updates to fetch in a single polling request (1-100)
+  /// Lower values provide faster processing, higher values are more efficient
+  updateLimit: Int(this > 0 && this < 101)
+
+  /// Validates Telegram Bot API token format
+  hidden isValid = (value) ->
+      if (value == "")
+        throw("Value is empty.")
+      else if (!value.matches(Regex("^[0-9]{8,10}:[a-zA-Z0-9_-]{35}$")))
+        throw("Value is not a valid Telegram bot API key.")
+      else true
+}
+
+/// Authentication and authorization settings
+class AuthConfiguration {
+  /// List of Telegram usernames with administrator privileges
+  /// Admins receive special responses and may have access to restricted commands
+  admininstrators: Listing<Admininstrator>(!isEmpty)
+}
+
+/// Administrator user definition
+class Admininstrator {
+  /// Telegram username (without @ symbol)
+  userName: String(!isEmpty)
+}
+
+/// Access level enumeration for command permissions
+typealias AccessLevel = "user"|"admin"
+
+/// Bot command definition with description and access level
+class Command {
+  /// Command text (e.g., "/start", "/help")
+  command: String(!isEmpty)
+
+  /// Description of what the command does
+  description: String(!isEmpty)
+
+  /// Access level required to execute this command
+  accessLevel: AccessLevel
+}
+
+/// Command configuration for bot interactions
+class CommandConfiguration {
+  /// Map of semantic command names to their definitions
+  /// Key: semantic command name (e.g., "activateGroup", "getServerLoad")
+  /// Value: Command object with format, description, and access level
+  commands: Mapping<String, Command>
+}
+
+/// Supported video link pattern definition
+class SupportedLinkPattern {
+  /// Human-readable name of the platform (e.g., "Instagram Reels", "TikTok")
+  name: String(!isEmpty)
+
+  /// Regular expression pattern to match URLs
+  pattern: String(!isEmpty)
+
+  /// Example URL for user reference
+  example: String(!isEmpty)
+}
+
+/// Video processing configuration
+class VideoProcessingConfiguration {
+  /// Number of worker goroutines for concurrent video processing
+  workerCount: Int(this > 0 && this <= 10)
+
+  /// Interval in seconds for polling tasks from database
+  taskPollingInterval: Int(this > 0)
+
+  /// Maximum number of retry attempts for failed downloads
+  maxRetries: Int(this >= 0)
+
+  /// Supported video link patterns
+  supportedLinks: Listing<SupportedLinkPattern>(!isEmpty)
+
+  /// Output video format (e.g., "mp4", "webm")
+  outputFormat: String(!isEmpty)
+
+  /// Video quality settings for yt-dlp (e.g., "best[height<=720]", "worst")
+  videoQuality: String(!isEmpty)
+
+  /// Maximum file size in MB for uploads
+  maxFileSizeMB: Int(this > 0)
+
+  /// Path to yt-dlp executable
+  ytdlpExecutablePath: String(!isEmpty)
+}
+
+/// Bot configuration settings for Telegram API integration
+botConfiguration: TgBotConfiguration
+
+/// Authentication and authorization settings
+authConfiguration: AuthConfiguration
+
+/// Command configuration for bot interactions
+commandConfiguration: CommandConfiguration
+
+/// Video processing configuration
+videoProcessingConfiguration: VideoProcessingConfiguration
+
+/// Enable debug mode for verbose logging and debugging information
+debug: Boolean

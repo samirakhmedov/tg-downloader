@@ -1,0 +1,7 @@
+build
+env
+go.sum
+ent
+output
+database.db
+config/Config.pkl

@@ -1,0 +1,98 @@
+amends "templates/TgDownloaderConfig.pkl"
+
+botConfiguration {
+    tgBotApiKey = "PASTE KEY HERE"
+
+    updateTimeout = 0
+
+    updateLimit = 2
+}
+
+authConfiguration {
+    admininstrators {
+        new {
+            userName = "ADMIN"
+        }
+    }
+}
+
+commandConfiguration {
+    commands {
+        ["activateGroup"] {
+            command = "/a"
+            description = "Activate this group for downloading"
+            accessLevel = "user"
+        }
+        ["deactivateGroup"] {
+            command = "/d"
+            description = "Deactivate this group"
+            accessLevel = "user"
+        }
+        ["getBotCommands"] {
+            command = "/i"
+            description = "Get available bot commands"
+            accessLevel = "user"
+        }
+        ["loadResource"] {
+            command = "/l"
+            description = "Load resource for downloading"
+            accessLevel = "user"
+        }
+        ["start"] {
+            command = "/start"
+            description = "Sthart the bot"
+            accessLevel = "user"
+        }
+        ["getServerLoad"] {
+            command = "/l"
+            description = "Get server load information"
+            accessLevel = "admin"
+        }
+        ["getAllGroups"] {
+            command = "/a"
+            description = "Get all groups"
+            accessLevel = "admin"
+        }
+        ["deleteGroup"] {
+            command = "/d"
+            description = "Delete a group"
+            accessLevel = "admin"
+        }
+    }
+}
+
+videoProcessingConfiguration {
+    workerCount = 10
+    taskPollingInterval = 1
+    maxRetries = 2
+    outputFormat = "mp4"
+    videoQuality = "best[height<=720]/best[height<=1080]/best"
+    maxFileSizeMB = 10
+    ytdlpExecutablePath = "YT-DLP-PATH-FOR-DOWNLOAD"
+
+    supportedLinks {
+        new {
+            name = "Instagram Reels"
+            pattern = "^https://www\\.instagram\\.com/reel/[A-Za-z0-9_-]+(/\\?.*)?$"
+            example = "EXAMPLE"
+        }
+        new {
+            name = "TikTok"
+            pattern = "^https://vt\\.tiktok\\.com/[A-Za-z0-9]+/?$"
+            example = "EXAMPLE"
+        }
+        new {
+            name = "YouTube Shorts"
+            pattern = "^https://youtube\\.com/shorts/[A-Za-z0-9_-]+\\?.*$"
+            example = "EXAMPLE"
+        }
+        new {
+            name = "Twitter/X Shorts"
+            pattern = "^https://vxtwitter\\.com/[A-Za-z0-9_]+/status/[0-9]+$"
+            example = "EXAMPLE"
+        }
+        // Any new formats...
+    }
+}
+
+debug = false
