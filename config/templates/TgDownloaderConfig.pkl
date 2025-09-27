@@ -99,6 +99,37 @@ class VideoProcessingConfiguration {
 
   /// Path to yt-dlp executable
   ytdlpExecutablePath: String(!isEmpty)
+
+  /// Browser to extract cookies from for authentication (e.g., "chrome", "firefox", "safari")
+  /// Leave empty to disable cookie extraction
+  cookiesFromBrowser: String?
+
+  /// Custom User-Agent string to avoid bot detection
+  /// Leave empty to use default yt-dlp user agent
+  userAgent: String?
+
+  /// Force IPv4 connections to avoid IPv6 connectivity issues
+  forceIPv4: Boolean
+
+  /// Sleep interval in seconds between downloads to avoid rate limiting
+  /// 0 means no sleep interval
+  sleepInterval: Float(this >= 0)
+
+  /// Maximum sleep interval in seconds for random delays
+  /// 0 means no maximum sleep interval
+  maxSleepInterval: Float(this >= 0)
+
+  /// TikTok-specific API hostname for workarounds
+  /// Leave empty to use default TikTok API
+  tiktokApiHostname: String?
+
+  /// Additional extractor arguments as key:value pairs
+  /// Example: tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com
+  extractorArgs: Listing<String>
+
+  /// Custom HTTP headers as key:value pairs
+  /// Example: "Referer:https://example.com"
+  customHeaders: Listing<String>
 }
 
 /// Bot configuration settings for Telegram API integration

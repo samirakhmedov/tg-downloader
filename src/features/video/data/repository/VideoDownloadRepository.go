@@ -75,6 +75,9 @@ func (r *VideoDownloadRepository) DownloadVideo(url string, outputDir string) (*
 		dl = dl.RecodeVideo(r.environment.VideoProcessingConfiguration.OutputFormat)
 	}
 
+	// Apply yt-dlp configuration options
+	dl = r.applyYtdlpOptions(dl)
+
 	// Execute download
 	_, err := dl.Run(context.Background(), url)
 	if err != nil {
@@ -139,4 +142,55 @@ func (r *VideoDownloadRepository) DownloadVideo(url string, outputDir string) (*
 		FileName: filepath.Base(downloadedFile),
 		FileSize: fileSize,
 	}, nil
+}
+
+// applyYtdlpOptions applies yt-dlp configuration options from the environment
+func (r *VideoDownloadRepository) applyYtdlpOptions(dl *ytdlp.Command) *ytdlp.Command {
+	config := r.environment.VideoProcessingConfiguration
+
+	// Browser cookies for authentication
+	if config.CookiesFromBrowser != nil && *config.CookiesFromBrowser != "" {
+		dl = dl.CookiesFromBrowser(*config.CookiesFromBrowser)
+	}
+
+	// Force IPv4 if configured
+	if config.ForceIPv4 {
+		dl = dl.ForceIPv4()
+	}
+
+	// Sleep interval for rate limiting
+	if config.SleepInterval > 0 {
+		dl = dl.SleepInterval(config.SleepInterval)
+	}
+
+	// Maximum sleep interval for random delays
+	if config.MaxSleepInterval > 0 {
+		dl = dl.MaxSleepInterval(config.MaxSleepInterval)
+	}
+
+	// Custom User-Agent via headers (UserAgent method is deprecated)
+	if config.UserAgent != nil && *config.UserAgent != "" {
+		dl = dl.AddHeaders("User-Agent:" + *config.UserAgent)
+	}
+
+	// TikTok-specific extractor arguments
+	if config.TiktokApiHostname != nil && *config.TiktokApiHostname != "" {
+		dl = dl.ExtractorArgs("tiktok:api_hostname=" + *config.TiktokApiHostname)
+	}
+
+	// Additional extractor arguments
+	for _, extractorArg := range config.ExtractorArgs {
+		if extractorArg != "" {
+			dl = dl.ExtractorArgs(extractorArg)
+		}
+	}
+
+	// Custom HTTP headers
+	for _, header := range config.CustomHeaders {
+		if header != "" {
+			dl = dl.AddHeaders(header)
+		}
+	}
+
+	return dl
 }
