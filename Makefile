@@ -4,7 +4,15 @@ init:
 	make install
 
 	make config-gen
+
+	make db-gen
 	
+	go mod tidy
+
+db-gen:
+	go generate ./ent
+
+tidy:
 	go mod tidy
 
 config-gen:
