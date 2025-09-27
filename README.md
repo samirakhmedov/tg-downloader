@@ -159,6 +159,7 @@ videoProcessingConfiguration {
 - **TikTok**: `https://vt.tiktok.com/*`
 - **YouTube Shorts**: `https://youtube.com/shorts/*`
 - **Twitter/X**: `https://vxtwitter.com/*/status/*`
+- Basically anything yt-dlp currently supports, check the configuration
 
 ## ✅ Pros
 
