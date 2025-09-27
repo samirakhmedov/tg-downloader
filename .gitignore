@@ -9,5 +9,6 @@ config/Config.pkl
 *
 
 !ent/schema/*.go
+!ent/generate.go
 
 !*/
