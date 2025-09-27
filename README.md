@@ -223,4 +223,6 @@ videoProcessingConfiguration {
 
 ## 📄 License
 
-This project structure suggests a clean, maintainable codebase following Go best practices with modern tooling for configuration management and dependency injection.
+This code is licensed under the MIT license.
+
+Even if basically the only thing this bot does is automatically downloading videos from links, so there's not that big of a risk, I don't claim any responsibilties at all for the usage of this bot and the eventual consequences.
