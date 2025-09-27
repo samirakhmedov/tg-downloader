@@ -5,3 +5,9 @@ ent
 output
 database.db
 config/Config.pkl
+
+*
+
+!ent/schema/*.go
+
+!*/
