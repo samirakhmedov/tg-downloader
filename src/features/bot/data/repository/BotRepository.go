@@ -22,7 +22,7 @@ func NewBotRepository(environment env.TGDownloader, botApi *tgbotapi.BotAPI) *Bo
 	return &BotRepository{
 		environment:      environment,
 		botApi:           botApi,
-		converter:        converter.NewUpdateToBotEventConverter(environment.CommandConfiguration),
+		converter:        converter.NewUpdateToBotEventConverter(environment),
 		commandConverter: converter.NewCommandToBotCommandConverter(),
 		chatConverter:    converter.NewChatToChatInfoConverter(),
 	}

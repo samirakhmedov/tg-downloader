@@ -17,6 +17,10 @@ class TgBotConfiguration {
   /// Lower values provide faster processing, higher values are more efficient
   updateLimit: Int(this > 0 && this < 101)
 
+  /// Bot name (username) for handling commands with bot name suffix
+  /// Format: bot username without @ symbol (e.g., "mybotname")
+  botName: String(!isEmpty)
+
   /// Validates Telegram Bot API token format
   hidden isValid = (value) ->
       if (value == "")

@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"tg-downloader/env"
@@ -11,18 +12,18 @@ import (
 )
 
 type UpdateToBotEventConverter struct {
-	commandConfig env.CommandConfiguration
+	environment env.TGDownloader
 }
 
-func NewUpdateToBotEventConverter(commandConfig env.CommandConfiguration) *UpdateToBotEventConverter {
+func NewUpdateToBotEventConverter(environment env.TGDownloader) *UpdateToBotEventConverter {
 	return &UpdateToBotEventConverter{
-		commandConfig: commandConfig,
+		environment: environment,
 	}
 }
 
 func (c *UpdateToBotEventConverter) Convert() core.Codec[tgbotapi.Update, entity.BotEvent] {
 	return &UpdateToBotEventCodec{
-		commandConfig: c.commandConfig,
+		environment: c.environment,
 	}
 }
 
@@ -31,7 +32,7 @@ func (c *UpdateToBotEventConverter) Parse() core.Codec[entity.BotEvent, tgbotapi
 }
 
 type UpdateToBotEventCodec struct {
-	commandConfig env.CommandConfiguration
+	environment env.TGDownloader
 }
 
 func (c *UpdateToBotEventCodec) Convert(source tgbotapi.Update) entity.BotEvent {
@@ -48,54 +49,79 @@ func (c *UpdateToBotEventCodec) Convert(source tgbotapi.Update) entity.BotEvent 
 
 	if isGroup {
 		groupID := message.Chat.ID
-		return c.parseGroupCommand(messageText, groupID, userID, userName)
+		return c.parseGroupCommand(message, groupID, userID, userName)
 	} else {
 		return c.parseDirectCommand(messageText, userID, userName)
 	}
 }
 
-func (c *UpdateToBotEventCodec) parseGroupCommand(messageText string, groupID, userID int64, userName string) entity.BotEvent {
+func (c *UpdateToBotEventCodec) parseGroupCommand(message *tgbotapi.Message, groupID, userID int64, userName string) entity.BotEvent {
+	commands := c.environment.CommandConfiguration.Commands
+	messageText := strings.TrimSpace(message.Text)
+
 	// Parse the command (first word)
 	parts := strings.Fields(messageText)
 	if len(parts) == 0 {
-		return entity.ErrorGroup{
-			GroupID: groupID,
-			Message: "Empty command",
+		return entity.IgnoreCommand{
+			UserID:   userID,
+			UserName: userName,
+			GroupID:  groupID,
+			Command:  "",
 		}
 	}
 
-	command := parts[0]
+	command := c.extractBotNameFromCommand(parts[0])
 
 	switch command {
-	case c.commandConfig.Commands[core.ActivateCommandKey].Command:
+	case commands[core.ActivateCommandKey].Command:
 		return entity.ActivateGroup{
 			GroupID:  groupID,
 			UserID:   userID,
 			UserName: userName,
 		}
-	case c.commandConfig.Commands[core.DeactivateCommandKey].Command:
+	case commands[core.DeactivateCommandKey].Command:
 		return entity.DeactivateGroup{
 			GroupID:  groupID,
 			UserID:   userID,
 			UserName: userName,
 		}
-	case c.commandConfig.Commands[core.LoadResourceKey].Command:
-		// Parse link from message format: /l {link}
+	case commands[core.LoadResourceKey].Command:
+		// Handle load resource command with multiple scenarios:
+		// 1. Reply to message containing link: /l (as reply)
+		// 2. Direct command with link: /l {link}
 		link := ""
-		if len(parts) >= 2 {
+
+		// Check if this is a reply to another message
+		if message.ReplyToMessage != nil {
+			// Extract link from the replied-to message using flexible extraction
+			replyText := strings.TrimSpace(message.ReplyToMessage.Text)
+			if hasLink, foundLink := c.extractLinkFromText(replyText); hasLink {
+				link = foundLink
+			}
+		} else if len(parts) >= 2 {
+			// Traditional format: /l {link}
 			link = parts[1]
 		}
+
 		return entity.GetResource{
 			GroupID: groupID,
 			Link:    link,
 		}
-	case c.commandConfig.Commands[core.GetBotCommandsKey].Command:
+	case commands[core.GetBotCommandsKey].Command:
 		return entity.GroupGetBotCommands{
 			GroupID:  groupID,
 			UserID:   userID,
 			UserName: userName,
 		}
 	default:
+		// Check if message contains a supported link
+		if hasLink, link := c.containsSupportedLink(messageText); hasLink {
+			return entity.GetResource{
+				GroupID: groupID,
+				Link:    link,
+			}
+		}
+
 		return entity.IgnoreCommand{
 			UserID:   userID,
 			UserName: userName,
@@ -106,34 +132,36 @@ func (c *UpdateToBotEventCodec) parseGroupCommand(messageText string, groupID, u
 }
 
 func (c *UpdateToBotEventCodec) parseDirectCommand(messageText string, userID int64, userName string) entity.BotEvent {
+	commands := c.environment.CommandConfiguration.Commands
+
 	switch {
-	case messageText == c.commandConfig.Commands[core.StartBotKey].Command:
+	case messageText == commands[core.StartBotKey].Command:
 		return entity.StartBot{
 			UserID:   userID,
 			UserName: userName,
 		}
-	case messageText == c.commandConfig.Commands[core.GetAllGroupsKey].Command:
+	case messageText == commands[core.GetAllGroupsKey].Command:
 		return entity.GetAllGroups{
 			UserID:   userID,
 			UserName: userName,
 		}
-	case messageText == c.commandConfig.Commands[core.GetServerLoadKey].Command:
+	case messageText == commands[core.GetServerLoadKey].Command:
 		return entity.GetServerLoad{
 			UserID:   userID,
 			UserName: userName,
 		}
-	case messageText == c.commandConfig.Commands[core.GetBotCommandsKey].Command:
+	case messageText == commands[core.GetBotCommandsKey].Command:
 		return entity.DirectGetBotCommands{
 			UserID:   userID,
 			UserName: userName,
 		}
-	case strings.HasPrefix(messageText, c.commandConfig.Commands[core.DeleteGroupKey].Command+" "):
-		groupNameStr := strings.TrimSpace(strings.TrimPrefix(messageText, c.commandConfig.Commands[core.DeleteGroupKey].Command))
+	case strings.HasPrefix(messageText, commands[core.DeleteGroupKey].Command+" "):
+		groupNameStr := strings.TrimSpace(strings.TrimPrefix(messageText, commands[core.DeleteGroupKey].Command))
 		if groupNameStr == "" {
 			return entity.ErrorDirect{
 				UserID:   userID,
 				UserName: userName,
-				Message:  "Group name is required for delete command: " + c.commandConfig.Commands[core.DeleteGroupKey].Command + " {GROUP_NAME}",
+				Message:  "Group name is required for delete command: " + commands[core.DeleteGroupKey].Command + " {GROUP_NAME}",
 			}
 		}
 		groupID, err := strconv.ParseInt(groupNameStr, 10, 64)
@@ -163,4 +191,51 @@ type BotEventToUpdateCodec struct{}
 
 func (c *BotEventToUpdateCodec) Convert(source entity.BotEvent) tgbotapi.Update {
 	return tgbotapi.Update{}
+}
+
+// Helper functions for link detection and bot name parsing
+
+// containsSupportedLink checks if the text contains any supported link pattern and returns the first match
+func (c *UpdateToBotEventCodec) containsSupportedLink(text string) (bool, string) {
+	for _, linkPattern := range c.environment.VideoProcessingConfiguration.SupportedLinks {
+		re, err := regexp.Compile(linkPattern.Pattern)
+		if err != nil {
+			continue
+		}
+		if match := re.FindString(text); match != "" {
+			return true, match
+		}
+	}
+	return false, ""
+}
+
+// extractLinkFromText extracts links from text even when surrounded by other content (for reply scenarios)
+func (c *UpdateToBotEventCodec) extractLinkFromText(text string) (bool, string) {
+	for _, linkPattern := range c.environment.VideoProcessingConfiguration.SupportedLinks {
+		// Convert anchored pattern to flexible pattern that stops at word boundaries
+		flexiblePattern := strings.TrimPrefix(linkPattern.Pattern, "^")
+		flexiblePattern = strings.TrimSuffix(flexiblePattern, "$")
+
+		// Replace .* with [^\s]* to stop at whitespace boundaries for URL parameters
+		flexiblePattern = strings.ReplaceAll(flexiblePattern, ".*", "[^\\s]*")
+
+		re, err := regexp.Compile(flexiblePattern)
+		if err != nil {
+			continue
+		}
+		if match := re.FindString(text); match != "" {
+			return true, match
+		}
+	}
+	return false, ""
+}
+
+// extractBotNameFromCommand removes bot name suffix from command (e.g., "/l@botname" -> "/l")
+func (c *UpdateToBotEventCodec) extractBotNameFromCommand(command string) string {
+	botName := c.environment.BotConfiguration.BotName
+	suffix := "@" + botName
+	if strings.HasSuffix(command, suffix) {
+		return strings.TrimSuffix(command, suffix)
+	}
+	return command
 }

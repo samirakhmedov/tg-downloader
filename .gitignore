@@ -5,6 +5,7 @@ ent
 output
 database.db
 config/Config.pkl
+Dockerfile
 
 *
 
