@@ -6,6 +6,8 @@ botConfiguration {
     updateTimeout = 0
 
     updateLimit = 2
+
+    botName = "example"
 }
 
 authConfiguration {
