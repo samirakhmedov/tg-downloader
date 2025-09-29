@@ -44,7 +44,7 @@ src/
 ### Prerequisites
 
 - **Go 1.25.1** or later
-- **Apple Pkl**: For configuration generation (`pkl`)
+- **Apple Pkl**: For configuration generation (`pkl`, `pkl-go`)
 - **yt-dlp**: Video downloading utility
 - **SQLite**: Database (automatically managed)
 
@@ -56,19 +56,29 @@ src/
    cd tg-downloader
    ```
 
-2. **Install dependencies and setup**:
-   ```bash
-   make init
-   ```
-
-3. **Configure the bot**:
-   Edit `config/Config.pkl` with your bot token and settings:
+2. **Configure the bot**:
+   Create `config/Config.pkl` with your bot token and settings:
    ```pkl
    botConfiguration {
        tgBotApiKey = "YOUR_BOT_TOKEN_HERE"
        updateTimeout = 0
        updateLimit = 2
    }
+
+   authConfiguration { ... }
+
+   commandConfiguration { ... }
+
+   videoProcessingConfiguration { ... }
+
+   debug = false
+   ```
+
+   For a reference, look at the [example](/config/Example.pkl).
+
+3. **Install dependencies and setup**:
+   ```bash
+   make init
    ```
 
 4. **Build and run**:
