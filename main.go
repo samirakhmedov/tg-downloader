@@ -16,6 +16,16 @@ func main() {
 			src.NewBotConfiguration,
 		),
 		fx.Provide(
+			src.NewDebugLoggerStrategy,
+		),
+		fx.Provide(
+			src.NewLoggerStrategies,
+		),
+		fx.Provide(
+			src.NewLogger,
+		),
+		fx.WithLogger(src.NewFxLogger),
+		fx.Provide(
 			src.NewBotAPI,
 		),
 		fx.Provide(

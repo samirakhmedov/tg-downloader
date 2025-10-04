@@ -2,21 +2,21 @@ package src
 
 import (
 	"context"
-	"log"
+	"tg-downloader/src/core/logger"
 	controller "tg-downloader/src/features/bot/interface"
 
 	"go.uber.org/fx"
 )
 
-func StartBot(lc fx.Lifecycle, botController controller.IBotController) {
+func StartBot(lc fx.Lifecycle, botController controller.IBotController, logger *logger.Logger) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			log.Println("Starting bot...")
+			logger.Info("Starting bot...")
 			botController.Initialize()
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			log.Println("Bot stopped gracefully")
+			logger.Info("Bot stopped gracefully")
 			botController.Dispose()
 			return nil
 		},

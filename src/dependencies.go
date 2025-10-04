@@ -2,14 +2,16 @@ package src
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"tg-downloader/ent"
 	"tg-downloader/env"
 	"tg-downloader/src/core"
+	"tg-downloader/src/core/logger"
 	"tg-downloader/src/features/bot/data/repository"
-	controller "tg-downloader/src/features/bot/interface"
 	i "tg-downloader/src/features/bot/domain/repository"
 	"tg-downloader/src/features/bot/domain/service"
+	controller "tg-downloader/src/features/bot/interface"
 	systemRepo "tg-downloader/src/features/system/data/repository"
 	iSystemRepo "tg-downloader/src/features/system/domain/repository"
 	videoRepo "tg-downloader/src/features/video/data/repository"
@@ -20,6 +22,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/fx"
+	"go.uber.org/fx/fxevent"
 )
 
 func NewBotConfiguration() env.TGDownloader {
@@ -32,11 +35,11 @@ func NewBotConfiguration() env.TGDownloader {
 	return cfg
 }
 
-func NewDatabase(cfg env.TGDownloader, lc fx.Lifecycle) *ent.Client {
+func NewDatabase(cfg env.TGDownloader, logger *logger.Logger, lc fx.Lifecycle) *ent.Client {
 	drv, err := sql.Open(core.DatabaseDriver, core.DatabaseSource)
 
 	if err != nil {
-		log.Fatalf("Failed opening connection to %s: %v", core.DatabaseDriver, err)
+		logger.Error(fmt.Sprintf("Failed opening connection to %s: %v", core.DatabaseDriver, err))
 	}
 
 	var client = ent.NewClient(ent.Driver(drv))
@@ -47,12 +50,12 @@ func NewDatabase(cfg env.TGDownloader, lc fx.Lifecycle) *ent.Client {
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			log.Println("Running migrations...")
+			logger.Info("Running migrations...")
 
 			return client.Schema.Create(context.Background())
 		},
 		OnStop: func(ctx context.Context) error {
-			log.Println("Closing database connection...")
+			logger.Info("Closing database connection...")
 			return client.Close()
 		},
 	})
@@ -60,18 +63,18 @@ func NewDatabase(cfg env.TGDownloader, lc fx.Lifecycle) *ent.Client {
 	return client
 }
 
-func NewBotAPI(cfg env.TGDownloader, lc fx.Lifecycle) *tgbotapi.BotAPI {
+func NewBotAPI(cfg env.TGDownloader, lc fx.Lifecycle, logger *logger.Logger) *tgbotapi.BotAPI {
 	bot, err := tgbotapi.NewBotAPI(cfg.TelegramConfiguration.TgBotApiKey)
 
 	if err != nil {
-		log.Fatal("Failed to create bot instance. Error: ", err)
+		logger.Error(fmt.Sprintf("Failed to create bot instance. Error: %s", err))
 	}
 
 	bot.Debug = cfg.Debug
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
-			log.Println("Stopping bot updates...")
+			logger.Info("Stopping bot updates...")
 			bot.StopReceivingUpdates()
 			return nil
 		},
@@ -96,8 +99,8 @@ func NewSystemRepository() iSystemRepo.ISystemRepository {
 	return systemRepo.NewSystemRepository()
 }
 
-func NewBotService(botRepo i.IBotRepository, cacheRepo i.IBotCacheRepository, systemRepo iSystemRepo.ISystemRepository, cfg env.TGDownloader) service.IBotService {
-	return service.NewBotService(botRepo, cacheRepo, systemRepo, cfg)
+func NewBotService(botRepo i.IBotRepository, cacheRepo i.IBotCacheRepository, systemRepo iSystemRepo.ISystemRepository, cfg env.TGDownloader, logger *logger.Logger) service.IBotService {
+	return service.NewBotService(botRepo, cacheRepo, systemRepo, cfg, logger)
 }
 
 func NewTaskRepository(database *ent.Client) i.ITaskRepository {
@@ -112,10 +115,33 @@ func NewUploadRepository(botApi *tgbotapi.BotAPI) iVideoRepo.IUploadRepository {
 	return videoRepo.NewUploadRepository(botApi)
 }
 
-func NewVideoService(cfg env.TGDownloader, taskRepo i.ITaskRepository, downloadRepo iVideoRepo.IVideoDownloadRepository, uploadRepo iVideoRepo.IUploadRepository) videoService.IVideoService {
-	return videoService.NewVideoService(cfg, taskRepo, downloadRepo, uploadRepo)
+func NewVideoService(cfg env.TGDownloader, taskRepo i.ITaskRepository, downloadRepo iVideoRepo.IVideoDownloadRepository, uploadRepo iVideoRepo.IUploadRepository, logger *logger.Logger) videoService.IVideoService {
+	return videoService.NewVideoService(cfg, taskRepo, downloadRepo, uploadRepo, logger)
 }
 
-func NewBotController(botService service.IBotService, videoService videoService.IVideoService) controller.IBotController {
-	return controller.NewBotController(botService, videoService)
+func NewBotController(botService service.IBotService, videoService videoService.IVideoService, logger *logger.Logger) controller.IBotController {
+	return controller.NewBotController(botService, videoService, logger)
+}
+
+// NewDebugLoggerStrategy creates a debug logger strategy based on the configuration.
+// The strategy will only log messages if debug mode is enabled in the configuration.
+func NewDebugLoggerStrategy(cfg env.TGDownloader) logger.ILoggerStrategy {
+	return logger.NewDebugLoggerStrategy(cfg.Debug)
+}
+
+// NewLoggerStrategies creates a list of logger strategies.
+// Currently includes only the debug logger strategy, but can be extended with additional strategies.
+func NewLoggerStrategies(debugStrategy logger.ILoggerStrategy) []logger.ILoggerStrategy {
+	return []logger.ILoggerStrategy{debugStrategy}
+}
+
+// NewLogger creates a new Logger with the provided list of strategies.
+// The logger will delegate all log calls to each strategy in the list.
+func NewLogger(strategies []logger.ILoggerStrategy) *logger.Logger {
+	return logger.NewLogger(strategies)
+}
+
+// NewFxLogger creates a new FX event logger that uses our custom Logger
+func NewFxLogger(logger *logger.Logger) fxevent.Logger {
+	return logger.NewFxLogger(logger)
 }

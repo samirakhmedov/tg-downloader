@@ -8,6 +8,7 @@ import (
 	"tg-downloader/env"
 	"tg-downloader/env/accesslevel"
 	"tg-downloader/src/core"
+	"tg-downloader/src/core/logger"
 	"tg-downloader/src/features/bot/data/converter"
 	"tg-downloader/src/features/bot/domain/entity"
 	"tg-downloader/src/features/bot/domain/repository"
@@ -21,15 +22,19 @@ type BotService struct {
 	systemRepo  systemRepo.ISystemRepository
 	environment env.TGDownloader
 	converter   *converter.EnvCommandToCommandConverter
+	logger      *logger.Logger
 }
 
-func NewBotService(botRepo repository.IBotRepository, cacheRepo repository.IBotCacheRepository, systemRepo systemRepo.ISystemRepository, environment env.TGDownloader) *BotService {
+// NewBotService creates a new BotService with all required dependencies.
+// The logger parameter allows dynamic control of logging behavior.
+func NewBotService(botRepo repository.IBotRepository, cacheRepo repository.IBotCacheRepository, systemRepo systemRepo.ISystemRepository, environment env.TGDownloader, logger *logger.Logger) *BotService {
 	return &BotService{
 		botRepo:     botRepo,
 		cacheRepo:   cacheRepo,
 		systemRepo:  systemRepo,
 		environment: environment,
 		converter:   converter.NewEnvCommandToCommandConverter(),
+		logger:      logger,
 	}
 }
 

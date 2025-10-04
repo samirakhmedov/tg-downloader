@@ -1,7 +1,8 @@
 package controller
 
 import (
-	"log"
+	"fmt"
+	"tg-downloader/src/core/logger"
 	"tg-downloader/src/features/bot/domain/entity"
 	"tg-downloader/src/features/bot/domain/service"
 	videoEntity "tg-downloader/src/features/video/domain/entity"
@@ -16,12 +17,16 @@ type IBotController interface {
 type BotController struct {
 	service      service.IBotService
 	videoService videoService.IVideoService
+	logger       *logger.Logger
 }
 
-func NewBotController(service service.IBotService, videoService videoService.IVideoService) *BotController {
+// NewBotController creates a new BotController with all required dependencies.
+// The logger parameter allows dynamic control of logging behavior throughout event processing.
+func NewBotController(service service.IBotService, videoService videoService.IVideoService, logger *logger.Logger) *BotController {
 	controller := &BotController{
 		service:      service,
 		videoService: videoService,
+		logger:       logger,
 	}
 
 	return controller
@@ -144,22 +149,22 @@ func (c *BotController) processVideoEvents() {
 func (c *BotController) handleVideoEvent(event videoEntity.VideoEvent) {
 	switch e := event.(type) {
 	case videoEntity.VideoProcessSuccess:
-		log.Printf("Received video success event for group %d with fileName=%s", e.GroupID, e.FileName)
+		c.logger.Debug(fmt.Sprintf("Received video success event for group %d with fileName=%s", e.GroupID, e.FileName))
 		err := c.service.HandleVideoProcessSuccess(e.GroupID, e.FileName)
 		if err != nil {
-			log.Printf("HandleVideoProcessSuccess failed: %v", err)
+			c.logger.Error(fmt.Sprintf("HandleVideoProcessSuccess failed: %v", err))
 		} else {
-			log.Printf("HandleVideoProcessSuccess completed successfully")
+			c.logger.Debug("HandleVideoProcessSuccess completed successfully")
 		}
 	case videoEntity.VideoProcessFailure:
-		log.Printf("Received video failure event for group %d with error=%s", e.GroupID, e.ErrorMessage)
+		c.logger.Debug(fmt.Sprintf("Received video failure event for group %d with error=%s", e.GroupID, e.ErrorMessage))
 		err := c.service.HandleVideoProcessFailure(e.GroupID, e.ErrorMessage)
 		if err != nil {
-			log.Printf("HandleVideoProcessFailure failed: %v", err)
+			c.logger.Error(fmt.Sprintf("HandleVideoProcessFailure failed: %v", err))
 		} else {
-			log.Printf("HandleVideoProcessFailure completed successfully")
+			c.logger.Debug("HandleVideoProcessFailure completed successfully")
 		}
 	default:
-		log.Printf("Unknown video event type: %T", e)
+		c.logger.Warn(fmt.Sprintf("Unknown video event type: %T", e))
 	}
 }
