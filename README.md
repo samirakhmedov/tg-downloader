@@ -69,7 +69,11 @@ src/
 
    commandConfiguration { ... }
 
-   videoProcessingConfiguration { ... }
+   commonDownloaderConfiguration { ... }
+
+   videoDownloaderConfiguration { ... }
+
+   workerConfiguration { ... }
 
    debug = false
    ```
@@ -101,32 +105,6 @@ make run               # Clean, build, and run the application
 make clean             # Remove build artifacts
 ```
 
-## 📋 Configuration
-
-The bot uses Apple Pkl for type-safe configuration. Key configuration sections:
-
-### Bot Configuration
-```pkl
-botConfiguration {
-    tgBotApiKey = "YOUR_BOT_TOKEN_HERE"
-    updateTimeout = 0
-    updateLimit = 2
-}
-```
-
-### Video Processing
-```pkl
-videoProcessingConfiguration {
-    workerCount = 10
-    taskPollingInterval = 1
-    maxRetries = 2
-    outputFormat = "mp4"
-    videoQuality = "best[height<=480]/best[height<=720]/best"
-    maxFileSizeMB = 10
-    ytdlpExecutablePath = "/usr/local/bin/yt-dlp"
-}
-```
-
 ## 🤖 Bot Commands
 
 ### Group Chat Commands
@@ -140,6 +118,8 @@ videoProcessingConfiguration {
 - `/d <group_id>` - Delete group
 - `/l` - Get server load information
 - `/i` - Get bot commands
+
+You could customize commands at configuration, but make sure to add support in code.
 
 ## 🔧 Third-Party Dependencies
 

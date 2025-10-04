@@ -61,47 +61,6 @@ commandConfiguration {
             accessLevel = "admin"
         }
     }
-}
-
-videoProcessingConfiguration {
-    workerCount = 10
-    taskPollingInterval = 1
-    maxRetries = 2
-    outputFormat = "mp4"
-    videoQuality = "best[height<=720]/best[height<=1080]/best"
-    maxFileSizeMB = 10
-    ytdlpExecutablePath = "YT-DLP-PATH-FOR-DOWNLOAD"
-
-    // Browser cookies for authentication (helps with TikTok, Instagram, etc.)
-    cookiesFromBrowser = "firefox"
-
-    // Custom user-agent to avoid bot detection
-    userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-    // Force IPv4 to avoid IPv6 connectivity issues
-    forceIPv4 = true
-
-    // Sleep intervals to avoid rate limiting
-    sleepInterval = 1.0
-    maxSleepInterval = 3.0
-
-    // TikTok-specific API hostname workaround for Linux issues
-    tiktokApiHostname = "api.tiktokv.com"
-
-    // Additional extractor arguments
-    extractorArgs {
-        "youtube:player_client=android,web"
-        
-        // ...
-    }
-
-    // Custom HTTP headers
-    customHeaders {
-        "Accept-Language:en-US,en;q=0.9"
-        "Accept-Encoding:gzip, deflate, br"
-        
-        // ...
-    }
 
     supportedLinks {
         new {
@@ -126,6 +85,50 @@ videoProcessingConfiguration {
         }
         // Any new formats...
     }
+}
+
+commonDownloaderConfiguration {
+    ytdlpExecutablePath = "YT-DLP-PATH-FOR-DOWNLOAD"
+
+    // Browser cookies for authentication (helps with TikTok, Instagram, etc.)
+    cookiesFromBrowser = "firefox"
+
+    // Force IPv4 to avoid IPv6 connectivity issues
+    forceIPv4 = true
+
+    // Sleep intervals to avoid rate limiting
+    sleepInterval = 1.0
+    maxSleepInterval = 3.0
+
+    // TikTok-specific API hostname workaround for Linux issues
+    tiktokApiHostname = "api.tiktokv.com"
+
+    // Additional extractor arguments
+    extractorArgs {
+        "youtube:player_client=android,web"
+        
+        // ...
+    }
+
+    // Custom HTTP headers
+    customHeaders {
+        "Accept-Language:en-US,en;q=0.9"
+        "Accept-Encoding:gzip, deflate, br"
+        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        // ...
+    }
+}
+
+videoDownloaderConfiguration {
+    outputFormat = "mp4"
+    videoQuality = "best[height<=720]/best[height<=1080]/best"
+    maxFileSizeMB = 10
+}
+
+workerConfiguration {
+    workerCount = 10
+    taskPollingInterval = 1
+    maxRetries = 2
 }
 
 debug = false
