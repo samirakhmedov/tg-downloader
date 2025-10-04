@@ -168,11 +168,6 @@ func (r *VideoDownloadRepository) applyYtdlpOptions(dl *ytdlp.Command) *ytdlp.Co
 		dl = dl.MaxSleepInterval(config.MaxSleepInterval)
 	}
 
-	// Custom User-Agent via headers (UserAgent method is deprecated)
-	if config.UserAgent != nil && *config.UserAgent != "" {
-		dl = dl.AddHeaders("User-Agent:" + *config.UserAgent)
-	}
-
 	// TikTok-specific extractor arguments
 	if config.TiktokApiHostname != nil && *config.TiktokApiHostname != "" {
 		dl = dl.ExtractorArgs("tiktok:api_hostname=" + *config.TiktokApiHostname)

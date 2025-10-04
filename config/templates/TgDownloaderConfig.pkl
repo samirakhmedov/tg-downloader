@@ -93,10 +93,6 @@ class CommonDownloaderConfiguration {
   /// Leave empty to disable cookie extraction
   cookiesFromBrowser: String?
 
-  /// Custom User-Agent string to avoid bot detection
-  /// Leave empty to use default yt-dlp user agent
-  userAgent: String?
-
   /// Force IPv4 connections to avoid IPv6 connectivity issues
   forceIPv4: Boolean
 
