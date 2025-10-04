@@ -6,6 +6,7 @@ require (
 	entgo.io/ent v0.14.5
 	github.com/apple/pkl-go v0.11.1
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
+	github.com/google/uuid v1.3.0
 	github.com/lrstanley/go-ytdlp v1.2.4
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/shirou/gopsutil/v3 v3.24.5
@@ -22,7 +23,6 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.18.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect

@@ -13,9 +13,9 @@ const (
 	DeleteGroupKey       = "deleteGroup"
 	StartBotKey          = "start"
 
-	// Video processing constants
-	VideoTempDirectory   = "temp/videos"
-	VideoOutputDirectory = "output/videos"
+	// Media processing constants
+	MediaTempDirectory   = "temp/media"
+	MediaOutputDirectory = "output/media"
 	URLRegexPattern      = `^https?://[^\s/$.?#].[^\s]*$`
 )
 

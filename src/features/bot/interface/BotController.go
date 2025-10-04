@@ -2,11 +2,12 @@ package controller
 
 import (
 	"fmt"
+	"strings"
 	"tg-downloader/src/core/logger"
 	"tg-downloader/src/features/bot/domain/entity"
 	"tg-downloader/src/features/bot/domain/service"
-	videoEntity "tg-downloader/src/features/video/domain/entity"
-	videoService "tg-downloader/src/features/video/domain/service"
+	mediaEntity "tg-downloader/src/features/media/domain/entity"
+	mediaService "tg-downloader/src/features/media/domain/service"
 )
 
 type IBotController interface {
@@ -16,16 +17,16 @@ type IBotController interface {
 
 type BotController struct {
 	service      service.IBotService
-	videoService videoService.IVideoService
+	mediaService mediaService.IMediaService
 	logger       *logger.Logger
 }
 
 // NewBotController creates a new BotController with all required dependencies.
 // The logger parameter allows dynamic control of logging behavior throughout event processing.
-func NewBotController(service service.IBotService, videoService videoService.IVideoService, logger *logger.Logger) *BotController {
+func NewBotController(service service.IBotService, mediaService mediaService.IMediaService, logger *logger.Logger) *BotController {
 	controller := &BotController{
 		service:      service,
-		videoService: videoService,
+		mediaService: mediaService,
 		logger:       logger,
 	}
 
@@ -33,13 +34,13 @@ func NewBotController(service service.IBotService, videoService videoService.IVi
 }
 
 func (c *BotController) Initialize() {
-	go c.videoService.StartWorkers()
+	go c.mediaService.StartWorkers()
 	go c.processEvents()
-	go c.processVideoEvents()
+	go c.processMediaEvents()
 }
 
 func (c *BotController) Dispose() {
-	c.videoService.StopWorkers()
+	c.mediaService.StopWorkers()
 }
 
 func (c *BotController) processEvents() {
@@ -119,8 +120,8 @@ func (c *BotController) handleBusinessLogic(event entity.BotEvent) {
 			return
 		}
 		if canProcess {
-			// Start video processing
-			c.videoService.ProcessVideo(e.Link, e.GroupID)
+			// Start media processing
+			c.mediaService.ProcessMedia(e.Link, e.GroupID)
 		}
 	case entity.DirectGetBotCommands:
 		c.service.GetDirectCommands(e.UserID, e.UserName)
@@ -138,26 +139,34 @@ func (c *BotController) handleBusinessLogic(event entity.BotEvent) {
 	}
 }
 
-func (c *BotController) processVideoEvents() {
-	videoEvents := c.videoService.GetVideoEvents()
+func (c *BotController) processMediaEvents() {
+	mediaEvents := c.mediaService.GetMediaEvents()
 
-	for event := range videoEvents {
-		go c.handleVideoEvent(event)
+	for event := range mediaEvents {
+		go c.handleMediaEvent(event)
 	}
 }
 
-func (c *BotController) handleVideoEvent(event videoEntity.VideoEvent) {
+func (c *BotController) handleMediaEvent(event mediaEntity.MediaEvent) {
 	switch e := event.(type) {
-	case videoEntity.VideoProcessSuccess:
-		c.logger.Debug(fmt.Sprintf("Received video success event for group %d with fileName=%s", e.GroupID, e.FileName))
-		err := c.service.HandleVideoProcessSuccess(e.GroupID, e.FileName)
+	case mediaEntity.MediaProcessSuccess:
+		fileNamesList := strings.Join(e.FileNames, ", ")
+		c.logger.Debug(fmt.Sprintf("Received media success event for group %d with fileNames=%s", e.GroupID, fileNamesList))
+
+		// For backward compatibility, use the first filename if available
+		fileName := ""
+		if len(e.FileNames) > 0 {
+			fileName = e.FileNames[0]
+		}
+
+		err := c.service.HandleVideoProcessSuccess(e.GroupID, fileName)
 		if err != nil {
 			c.logger.Error(fmt.Sprintf("HandleVideoProcessSuccess failed: %v", err))
 		} else {
 			c.logger.Debug("HandleVideoProcessSuccess completed successfully")
 		}
-	case videoEntity.VideoProcessFailure:
-		c.logger.Debug(fmt.Sprintf("Received video failure event for group %d with error=%s", e.GroupID, e.ErrorMessage))
+	case mediaEntity.MediaProcessFailure:
+		c.logger.Debug(fmt.Sprintf("Received media failure event for group %d with error=%s", e.GroupID, e.ErrorMessage))
 		err := c.service.HandleVideoProcessFailure(e.GroupID, e.ErrorMessage)
 		if err != nil {
 			c.logger.Error(fmt.Sprintf("HandleVideoProcessFailure failed: %v", err))
@@ -165,6 +174,6 @@ func (c *BotController) handleVideoEvent(event videoEntity.VideoEvent) {
 			c.logger.Debug("HandleVideoProcessFailure completed successfully")
 		}
 	default:
-		c.logger.Warn(fmt.Sprintf("Unknown video event type: %T", e))
+		c.logger.Warn(fmt.Sprintf("Unknown media event type: %T", e))
 	}
 }

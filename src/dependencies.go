@@ -14,9 +14,9 @@ import (
 	controller "tg-downloader/src/features/bot/interface"
 	systemRepo "tg-downloader/src/features/system/data/repository"
 	iSystemRepo "tg-downloader/src/features/system/domain/repository"
-	videoRepo "tg-downloader/src/features/video/data/repository"
-	iVideoRepo "tg-downloader/src/features/video/domain/repository"
-	videoService "tg-downloader/src/features/video/domain/service"
+	mediaRepo "tg-downloader/src/features/media/data/repository"
+	iMediaRepo "tg-downloader/src/features/media/domain/repository"
+	mediaService "tg-downloader/src/features/media/domain/service"
 
 	"entgo.io/ent/dialect/sql"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -107,20 +107,20 @@ func NewTaskRepository(database *ent.Client) i.ITaskRepository {
 	return repository.NewTaskRepository(database)
 }
 
-func NewVideoDownloadRepository(cfg env.TGDownloader) iVideoRepo.IVideoDownloadRepository {
-	return videoRepo.NewVideoDownloadRepository(cfg)
+func NewDownloadRepository(cfg env.TGDownloader) iMediaRepo.IDownloadRepository {
+	return mediaRepo.NewDownloadRepository(cfg)
 }
 
-func NewUploadRepository(botApi *tgbotapi.BotAPI) iVideoRepo.IUploadRepository {
-	return videoRepo.NewUploadRepository(botApi)
+func NewUploadRepository(botApi *tgbotapi.BotAPI) iMediaRepo.IUploadRepository {
+	return mediaRepo.NewUploadRepository(botApi)
 }
 
-func NewVideoService(cfg env.TGDownloader, taskRepo i.ITaskRepository, downloadRepo iVideoRepo.IVideoDownloadRepository, uploadRepo iVideoRepo.IUploadRepository, logger *logger.Logger) videoService.IVideoService {
-	return videoService.NewVideoService(cfg, taskRepo, downloadRepo, uploadRepo, logger)
+func NewMediaService(cfg env.TGDownloader, taskRepo i.ITaskRepository, downloadRepo iMediaRepo.IDownloadRepository, uploadRepo iMediaRepo.IUploadRepository, logger *logger.Logger) mediaService.IMediaService {
+	return mediaService.NewMediaService(cfg, taskRepo, downloadRepo, uploadRepo, logger)
 }
 
-func NewBotController(botService service.IBotService, videoService videoService.IVideoService, logger *logger.Logger) controller.IBotController {
-	return controller.NewBotController(botService, videoService, logger)
+func NewBotController(botService service.IBotService, mediaService mediaService.IMediaService, logger *logger.Logger) controller.IBotController {
+	return controller.NewBotController(botService, mediaService, logger)
 }
 
 // NewDebugLoggerStrategy creates a debug logger strategy based on the configuration.

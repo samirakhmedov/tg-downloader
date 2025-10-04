@@ -4,59 +4,60 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"tg-downloader/env"
 	"tg-downloader/src/core"
 	"tg-downloader/src/core/logger"
 	botRepo "tg-downloader/src/features/bot/domain/repository"
-	"tg-downloader/src/features/video/domain/entity"
-	"tg-downloader/src/features/video/domain/repository"
+	"tg-downloader/src/features/media/domain/entity"
+	"tg-downloader/src/features/media/domain/repository"
 	"time"
 )
 
-type VideoTask struct {
+type MediaTask struct {
 	ID       int
 	Link     string
 	GroupIDs []int64
 }
 
-type VideoService struct {
+type MediaService struct {
 	environment  env.TGDownloader
 	taskRepo     botRepo.ITaskRepository
-	downloadRepo repository.IVideoDownloadRepository
+	downloadRepo repository.IDownloadRepository
 	uploadRepo   repository.IUploadRepository
-	taskQueue    chan VideoTask
+	taskQueue    chan MediaTask
 	stopChannel  chan struct{}
-	eventChannel chan entity.VideoEvent
+	eventChannel chan entity.MediaEvent
 	wg           sync.WaitGroup
 	running      bool
 	mutex        sync.RWMutex
 	logger       *logger.Logger
 }
 
-// NewVideoService creates a new VideoService with all required dependencies.
-// The logger parameter allows dynamic control of logging behavior throughout video processing.
-func NewVideoService(
+// NewMediaService creates a new MediaService with all required dependencies.
+// The logger parameter allows dynamic control of logging behavior throughout media processing.
+func NewMediaService(
 	environment env.TGDownloader,
 	taskRepo botRepo.ITaskRepository,
-	downloadRepo repository.IVideoDownloadRepository,
+	downloadRepo repository.IDownloadRepository,
 	uploadRepo repository.IUploadRepository,
 	logger *logger.Logger,
-) *VideoService {
-	return &VideoService{
+) *MediaService {
+	return &MediaService{
 		environment:  environment,
 		taskRepo:     taskRepo,
 		downloadRepo: downloadRepo,
 		uploadRepo:   uploadRepo,
-		taskQueue:    make(chan VideoTask, environment.WorkerConfiguration.WorkerCount),
+		taskQueue:    make(chan MediaTask, environment.WorkerConfiguration.WorkerCount),
 		stopChannel:  make(chan struct{}),
-		eventChannel: make(chan entity.VideoEvent, 100),
+		eventChannel: make(chan entity.MediaEvent, 100),
 		running:      false,
 		logger:       logger,
 	}
 }
 
-func (s *VideoService) StartWorkers() {
+func (s *MediaService) StartWorkers() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -76,10 +77,10 @@ func (s *VideoService) StartWorkers() {
 	s.wg.Add(1)
 	go s.taskScheduler()
 
-	s.logger.Debug(fmt.Sprintf("VideoService started with %d workers", s.environment.WorkerConfiguration.WorkerCount))
+	s.logger.Debug(fmt.Sprintf("MediaService started with %d workers", s.environment.WorkerConfiguration.WorkerCount))
 }
 
-func (s *VideoService) StopWorkers() {
+func (s *MediaService) StopWorkers() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -91,19 +92,19 @@ func (s *VideoService) StopWorkers() {
 	close(s.stopChannel)
 	s.wg.Wait()
 
-	s.logger.Debug("VideoService stopped")
+	s.logger.Debug("MediaService stopped")
 }
 
-func (s *VideoService) ProcessVideo(link string, groupID int64) error {
+func (s *MediaService) ProcessMedia(link string, groupID int64) error {
 	_, err := s.taskRepo.CreateTask(link, groupID)
 	return err
 }
 
-func (s *VideoService) GetVideoEvents() entity.VideoEvents {
+func (s *MediaService) GetMediaEvents() entity.MediaEvents {
 	return s.eventChannel
 }
 
-func (s *VideoService) taskScheduler() {
+func (s *MediaService) taskScheduler() {
 	defer s.wg.Done()
 
 	ticker := time.NewTicker(time.Duration(s.environment.WorkerConfiguration.TaskPollingInterval) * time.Second)
@@ -120,7 +121,7 @@ func (s *VideoService) taskScheduler() {
 	}
 }
 
-func (s *VideoService) scheduleAvailableTasks() {
+func (s *MediaService) scheduleAvailableTasks() {
 	s.logger.Debug("scheduleAvailableTasks called")
 
 	// Get all available tasks and queue them for workers
@@ -148,7 +149,7 @@ func (s *VideoService) scheduleAvailableTasks() {
 		// Try to queue the task (non-blocking)
 		s.logger.Debug(fmt.Sprintf("Attempting to queue task %d", task.ID))
 		select {
-		case s.taskQueue <- VideoTask{ID: task.ID, Link: task.Link, GroupIDs: task.GroupIDs}:
+		case s.taskQueue <- MediaTask{ID: task.ID, Link: task.Link, GroupIDs: task.GroupIDs}:
 			// Task queued successfully
 			s.logger.Debug(fmt.Sprintf("Queued task %d for processing in %d groups", task.ID, len(task.GroupIDs)))
 		default:
@@ -165,7 +166,7 @@ func (s *VideoService) scheduleAvailableTasks() {
 	}
 }
 
-func (s *VideoService) worker() {
+func (s *MediaService) worker() {
 	defer s.wg.Done()
 
 	for {
@@ -180,7 +181,7 @@ func (s *VideoService) worker() {
 	}
 }
 
-func (s *VideoService) processTask(taskID int, link string, groupIDs []int64) {
+func (s *MediaService) processTask(taskID int, link string, groupIDs []int64) {
 	s.logger.Debug(fmt.Sprintf("Starting to process task %d with link: %s for groups: %v", taskID, link, groupIDs))
 
 	_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -194,13 +195,13 @@ func (s *VideoService) processTask(taskID int, link string, groupIDs []int64) {
 		return
 	}
 
-	s.logger.Debug(fmt.Sprintf("Processing %s video: %s", platformName, link))
+	s.logger.Debug(fmt.Sprintf("Processing %s media: %s", platformName, link))
 
-	// Download video to a shared directory (use first group ID for directory)
-	outputDir := fmt.Sprintf("%s/shared", core.VideoOutputDirectory)
+	// Download media to a shared directory (use first group ID for directory)
+	outputDir := fmt.Sprintf("%s/shared", core.MediaOutputDirectory)
 	s.logger.Debug(fmt.Sprintf("Starting download for task %d to directory: %s", taskID, outputDir))
 
-	result, err := s.downloadRepo.DownloadVideo(link, outputDir)
+	result, err := s.downloadRepo.Download(link, outputDir)
 	if err != nil || !result.Success {
 		s.logger.Debug(fmt.Sprintf("Download failed for task %d: %v", taskID, err))
 		if result != nil {
@@ -210,13 +211,13 @@ func (s *VideoService) processTask(taskID int, link string, groupIDs []int64) {
 		return
 	}
 
-	s.logger.Debug(fmt.Sprintf("Download successful for task %d, file: %s", taskID, result.FilePath))
+	s.logger.Debug(fmt.Sprintf("Download successful for task %d, files: %d", taskID, len(result.Files)))
 
 	// Upload to all groups
 	uploadCount := 0
 	for _, groupID := range groupIDs {
 		s.logger.Debug(fmt.Sprintf("Uploading to group %d", groupID))
-		err = s.uploadRepo.UploadVideo(result.FilePath, groupID)
+		err = s.uploadRepo.UploadMedia(result.Files, groupID)
 		if err != nil {
 			s.logger.Debug(fmt.Sprintf("Failed to upload to group %d: %v", groupID, err))
 			// Continue uploading to other groups
@@ -227,15 +228,23 @@ func (s *VideoService) processTask(taskID int, link string, groupIDs []int64) {
 	}
 
 	// Success - clean up and notify all groups
-	s.logger.Debug(fmt.Sprintf("Cleaning up file: %s", result.FilePath))
-	os.Remove(result.FilePath)
+	for _, file := range result.Files {
+		s.logger.Debug(fmt.Sprintf("Cleaning up file: %s", file.FilePath))
+		os.Remove(file.FilePath)
+	}
+
+	// Extract filenames for success event
+	var fileNames []string
+	for _, file := range result.Files {
+		fileNames = append(fileNames, file.FileName)
+	}
 
 	s.logger.Debug(fmt.Sprintf("Calling success handler for task %d with %d successful uploads", taskID, uploadCount))
-	s.handleTaskSuccess(taskID, groupIDs, result.FileName)
+	s.handleTaskSuccess(taskID, groupIDs, fileNames)
 }
 
-func (s *VideoService) handleTaskSuccess(taskID int, groupIDs []int64, fileName string) {
-	s.logger.Debug(fmt.Sprintf("handleTaskSuccess called for task %d, groups %v, file %s", taskID, groupIDs, fileName))
+func (s *MediaService) handleTaskSuccess(taskID int, groupIDs []int64, fileNames []string) {
+	s.logger.Debug(fmt.Sprintf("handleTaskSuccess called for task %d, groups %v, files %v", taskID, groupIDs, fileNames))
 
 	// Delete completed task
 	if err := s.taskRepo.DeleteTask(taskID); err != nil {
@@ -244,21 +253,24 @@ func (s *VideoService) handleTaskSuccess(taskID int, groupIDs []int64, fileName 
 		s.logger.Debug(fmt.Sprintf("Successfully deleted completed task %d", taskID))
 	}
 
+	// Create display string for files
+	displayNames := strings.Join(fileNames, ", ")
+
 	// Emit success events for all groups
 	for _, groupID := range groupIDs {
-		s.logger.Debug(fmt.Sprintf("Emitting success event for group %d with fileName=%s", groupID, fileName))
+		s.logger.Debug(fmt.Sprintf("Emitting success event for group %d with fileNames=%v", groupID, fileNames))
 		select {
-		case s.eventChannel <- entity.VideoProcessSuccess{GroupID: groupID, FileName: fileName}:
+		case s.eventChannel <- entity.MediaProcessSuccess{GroupID: groupID, FileNames: fileNames}:
 			s.logger.Debug(fmt.Sprintf("Successfully emitted success event for group %d", groupID))
 		default:
 			s.logger.Warn(fmt.Sprintf("Event channel is full, dropping success event for group %d", groupID))
 		}
 	}
 
-	s.logger.Debug(fmt.Sprintf("Successfully processed video for groups %v: %s", groupIDs, fileName))
+	s.logger.Debug(fmt.Sprintf("Successfully processed media for groups %v: %s", groupIDs, displayNames))
 }
 
-func (s *VideoService) handleTaskFailure(taskID int, groupIDs []int64, errorMessage string) {
+func (s *MediaService) handleTaskFailure(taskID int, groupIDs []int64, errorMessage string) {
 	s.logger.Debug(fmt.Sprintf("handleTaskFailure called for task %d, groups %v, error: %s", taskID, groupIDs, errorMessage))
 
 	// Delete failed task
@@ -272,12 +284,12 @@ func (s *VideoService) handleTaskFailure(taskID int, groupIDs []int64, errorMess
 	for _, groupID := range groupIDs {
 		s.logger.Debug(fmt.Sprintf("Emitting failure event for group %d with error=%s", groupID, errorMessage))
 		select {
-		case s.eventChannel <- entity.VideoProcessFailure{GroupID: groupID, ErrorMessage: errorMessage}:
+		case s.eventChannel <- entity.MediaProcessFailure{GroupID: groupID, ErrorMessage: errorMessage}:
 			s.logger.Debug(fmt.Sprintf("Successfully emitted failure event for group %d", groupID))
 		default:
 			s.logger.Warn(fmt.Sprintf("Event channel is full, dropping failure event for group %d", groupID))
 		}
 	}
 
-	s.logger.Debug(fmt.Sprintf("Failed to process video for groups %v: %s", groupIDs, errorMessage))
+	s.logger.Debug(fmt.Sprintf("Failed to process media for groups %v: %s", groupIDs, errorMessage))
 }

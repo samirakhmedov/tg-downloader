@@ -93,10 +93,6 @@ class CommonDownloaderConfiguration {
   /// Leave empty to disable cookie extraction
   cookiesFromBrowser: String?
 
-  /// Custom User-Agent string to avoid bot detection
-  /// Leave empty to use default yt-dlp user agent
-  userAgent: String?
-
   /// Force IPv4 connections to avoid IPv6 connectivity issues
   forceIPv4: Boolean
 
@@ -117,7 +113,7 @@ class CommonDownloaderConfiguration {
   extractorArgs: Listing<String>
 
   /// Custom HTTP headers as key:value pairs
-  /// Example: "Referer:https://example.com"
+  /// Example: "User-Agent:Mozilla/5.0...", "Referer:https://example.com"
   customHeaders: Listing<String>
 }
 
@@ -126,14 +122,38 @@ class VideoDownloaderConfiguration {
   /// Output video format (e.g., "mp4", "webm")
   outputFormat: String(!isEmpty)
 
-  /// Video quality settings for yt-dlp (e.g., "best[height<=720]", "worst")
-  videoQuality: String(!isEmpty)
-
   /// Maximum file size in MB for uploads
   maxFileSizeMB: Int(this > 0)
+
+  /// Supported video file extensions
+  supportedExtensions: Listing<String>(!isEmpty)
 }
 
-/// Worker configuration for video processing
+/// Photo-specific downloader configuration
+class PhotoDownloaderConfiguration {
+  /// Output video format (e.g., "mp4", "webm")
+  outputFormat: String(!isEmpty)
+
+  /// Maximum file size in MB for photo uploads
+  maxFileSizeMB: Int(this > 0)
+
+  /// Supported photo file extensions
+  supportedExtensions: Listing<String>(!isEmpty)
+}
+
+/// Audio-specific downloader configuration
+class AudioDownloaderConfiguration {
+  /// Output audio format (e.g., "mp3", "m4a", "aac")
+  outputFormat: String(!isEmpty)
+
+  /// Maximum file size in MB for audio uploads
+  maxFileSizeMB: Int(this > 0)
+
+  /// Supported audio file extensions
+  supportedExtensions: Listing<String>(!isEmpty)
+}
+
+/// Worker configuration for media processing
 class WorkerConfiguration {
   /// Number of worker goroutines for concurrent video processing
   workerCount: Int(this > 0 && this <= 10)
@@ -160,7 +180,13 @@ commonDownloaderConfiguration: CommonDownloaderConfiguration
 /// Video-specific downloader configuration
 videoDownloaderConfiguration: VideoDownloaderConfiguration
 
-/// Worker configuration for video processing
+/// Photo-specific downloader configuration
+photoDownloaderConfiguration: PhotoDownloaderConfiguration
+
+/// Audio-specific downloader configuration
+audioDownloaderConfiguration: AudioDownloaderConfiguration
+
+/// Worker configuration for media processing
 workerConfiguration: WorkerConfiguration
 
 /// Enable debug mode for verbose logging and debugging information
