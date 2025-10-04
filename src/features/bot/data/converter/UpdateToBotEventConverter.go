@@ -197,7 +197,7 @@ func (c *BotEventToUpdateCodec) Convert(source entity.BotEvent) tgbotapi.Update 
 
 // containsSupportedLink checks if the text contains any supported link pattern and returns the first match
 func (c *UpdateToBotEventCodec) containsSupportedLink(text string) (bool, string) {
-	for _, linkPattern := range c.environment.VideoProcessingConfiguration.SupportedLinks {
+	for _, linkPattern := range c.environment.CommandConfiguration.SupportedLinks {
 		re, err := regexp.Compile(linkPattern.Pattern)
 		if err != nil {
 			continue
@@ -211,7 +211,7 @@ func (c *UpdateToBotEventCodec) containsSupportedLink(text string) (bool, string
 
 // extractLinkFromText extracts links from text even when surrounded by other content (for reply scenarios)
 func (c *UpdateToBotEventCodec) extractLinkFromText(text string) (bool, string) {
-	for _, linkPattern := range c.environment.VideoProcessingConfiguration.SupportedLinks {
+	for _, linkPattern := range c.environment.CommandConfiguration.SupportedLinks {
 		// Convert anchored pattern to flexible pattern that stops at word boundaries
 		flexiblePattern := strings.TrimPrefix(linkPattern.Pattern, "^")
 		flexiblePattern = strings.TrimSuffix(flexiblePattern, "$")
@@ -232,7 +232,7 @@ func (c *UpdateToBotEventCodec) extractLinkFromText(text string) (bool, string) 
 
 // extractBotNameFromCommand removes bot name suffix from command (e.g., "/l@botname" -> "/l")
 func (c *UpdateToBotEventCodec) extractBotNameFromCommand(command string) string {
-	botName := c.environment.BotConfiguration.BotName
+	botName := c.environment.TelegramConfiguration.BotName
 	suffix := "@" + botName
 	if strings.HasSuffix(command, suffix) {
 		return strings.TrimSuffix(command, suffix)

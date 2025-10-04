@@ -44,7 +44,7 @@ func NewVideoService(
 		taskRepo:     taskRepo,
 		downloadRepo: downloadRepo,
 		uploadRepo:   uploadRepo,
-		taskQueue:    make(chan VideoTask, environment.VideoProcessingConfiguration.WorkerCount),
+		taskQueue:    make(chan VideoTask, environment.WorkerConfiguration.WorkerCount),
 		stopChannel:  make(chan struct{}),
 		eventChannel: make(chan entity.VideoEvent, 100),
 		running:      false,
@@ -62,7 +62,7 @@ func (s *VideoService) StartWorkers() {
 	s.running = true
 
 	// Start worker pool
-	for i := 0; i < s.environment.VideoProcessingConfiguration.WorkerCount; i++ {
+	for i := 0; i < s.environment.WorkerConfiguration.WorkerCount; i++ {
 		s.wg.Add(1)
 		go s.worker()
 	}
@@ -71,7 +71,7 @@ func (s *VideoService) StartWorkers() {
 	s.wg.Add(1)
 	go s.taskScheduler()
 
-	log.Printf("VideoService started with %d workers", s.environment.VideoProcessingConfiguration.WorkerCount)
+	log.Printf("VideoService started with %d workers", s.environment.WorkerConfiguration.WorkerCount)
 }
 
 func (s *VideoService) StopWorkers() {
@@ -101,7 +101,7 @@ func (s *VideoService) GetVideoEvents() entity.VideoEvents {
 func (s *VideoService) taskScheduler() {
 	defer s.wg.Done()
 
-	ticker := time.NewTicker(time.Duration(s.environment.VideoProcessingConfiguration.TaskPollingInterval) * time.Second)
+	ticker := time.NewTicker(time.Duration(s.environment.WorkerConfiguration.TaskPollingInterval) * time.Second)
 	defer ticker.Stop()
 
 	for {

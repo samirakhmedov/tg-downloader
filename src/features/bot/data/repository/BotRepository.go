@@ -29,13 +29,13 @@ func NewBotRepository(environment env.TGDownloader, botApi *tgbotapi.BotAPI) *Bo
 }
 
 func (r *BotRepository) ReceiveEvents() entity.BotEvents {
-	ch := make(chan entity.BotEvent, r.environment.BotConfiguration.UpdateLimit)
+	ch := make(chan entity.BotEvent, r.environment.TelegramConfiguration.UpdateLimit)
 
 	go func() {
 		u := tgbotapi.NewUpdate(core.BotBegginingUpdateOffset)
-		u.Timeout = r.environment.BotConfiguration.UpdateTimeout
+		u.Timeout = r.environment.TelegramConfiguration.UpdateTimeout
 		u.AllowedUpdates = core.BotAllowedUpdates
-		u.Limit = r.environment.BotConfiguration.UpdateLimit
+		u.Limit = r.environment.TelegramConfiguration.UpdateLimit
 
 		channel := r.botApi.GetUpdatesChan(u)
 

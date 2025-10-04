@@ -32,7 +32,7 @@ func (r *VideoDownloadRepository) ValidateURL(url string) (bool, string, error) 
 	}
 
 	// Check against supported patterns
-	for _, linkPattern := range r.environment.VideoProcessingConfiguration.SupportedLinks {
+	for _, linkPattern := range r.environment.CommandConfiguration.SupportedLinks {
 		matched, err := regexp.MatchString(linkPattern.Pattern, url)
 		if err != nil {
 			continue
@@ -44,7 +44,7 @@ func (r *VideoDownloadRepository) ValidateURL(url string) (bool, string, error) 
 
 	// Build error message with supported formats
 	var supportedFormats string
-	for i, linkPattern := range r.environment.VideoProcessingConfiguration.SupportedLinks {
+	for i, linkPattern := range r.environment.CommandConfiguration.SupportedLinks {
 		if i > 0 {
 			supportedFormats += "\n"
 		}
@@ -65,14 +65,14 @@ func (r *VideoDownloadRepository) DownloadVideo(url string, outputDir string) (*
 
 	// Configure yt-dlp options with configured executable path
 	dl := ytdlp.New().
-		SetExecutable(r.environment.VideoProcessingConfiguration.YtdlpExecutablePath).
-		Format(r.environment.VideoProcessingConfiguration.VideoQuality).
+		SetExecutable(r.environment.CommonDownloaderConfiguration.YtdlpExecutablePath).
+		Format(r.environment.VideoDownloaderConfiguration.VideoQuality).
 		Output(filepath.Join(outputDir, "%(title)s.%(ext)s")).
 		NoCheckCertificates()
 
 	// Add format specification if needed
-	if r.environment.VideoProcessingConfiguration.OutputFormat != "" {
-		dl = dl.RecodeVideo(r.environment.VideoProcessingConfiguration.OutputFormat)
+	if r.environment.VideoDownloaderConfiguration.OutputFormat != "" {
+		dl = dl.RecodeVideo(r.environment.VideoDownloaderConfiguration.OutputFormat)
 	}
 
 	// Apply yt-dlp configuration options
@@ -126,7 +126,7 @@ func (r *VideoDownloadRepository) DownloadVideo(url string, outputDir string) (*
 	}
 
 	// Check file size limit
-	maxSizeMB := int64(r.environment.VideoProcessingConfiguration.MaxFileSizeMB)
+	maxSizeMB := int64(r.environment.VideoDownloaderConfiguration.MaxFileSizeMB)
 	if fileSize > maxSizeMB*1024*1024 {
 		// Clean up oversized file
 		os.Remove(downloadedFile)
@@ -146,7 +146,7 @@ func (r *VideoDownloadRepository) DownloadVideo(url string, outputDir string) (*
 
 // applyYtdlpOptions applies yt-dlp configuration options from the environment
 func (r *VideoDownloadRepository) applyYtdlpOptions(dl *ytdlp.Command) *ytdlp.Command {
-	config := r.environment.VideoProcessingConfiguration
+	config := r.environment.CommonDownloaderConfiguration
 
 	// Browser cookies for authentication
 	if config.CookiesFromBrowser != nil && *config.CookiesFromBrowser != "" {

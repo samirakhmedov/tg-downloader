@@ -61,7 +61,7 @@ func NewDatabase(cfg env.TGDownloader, lc fx.Lifecycle) *ent.Client {
 }
 
 func NewBotAPI(cfg env.TGDownloader, lc fx.Lifecycle) *tgbotapi.BotAPI {
-	bot, err := tgbotapi.NewBotAPI(cfg.BotConfiguration.TgBotApiKey)
+	bot, err := tgbotapi.NewBotAPI(cfg.TelegramConfiguration.TgBotApiKey)
 
 	if err != nil {
 		log.Fatal("Failed to create bot instance. Error: ", err)

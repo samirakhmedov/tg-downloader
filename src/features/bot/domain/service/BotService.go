@@ -504,7 +504,7 @@ func (s *BotService) LoadResource(groupID int64, link string) (bool, error) {
 
 	// Check against supported patterns
 	var isSupported bool
-	for _, linkPattern := range s.environment.VideoProcessingConfiguration.SupportedLinks {
+	for _, linkPattern := range s.environment.CommandConfiguration.SupportedLinks {
 		matched, err := regexp.MatchString(linkPattern.Pattern, link)
 		if err != nil {
 			continue
@@ -518,7 +518,7 @@ func (s *BotService) LoadResource(groupID int64, link string) (bool, error) {
 	if !isSupported {
 		// Build error message with supported formats
 		var supportedFormats string
-		for i, linkPattern := range s.environment.VideoProcessingConfiguration.SupportedLinks {
+		for i, linkPattern := range s.environment.CommandConfiguration.SupportedLinks {
 			if i > 0 {
 				supportedFormats += "\n"
 			}
