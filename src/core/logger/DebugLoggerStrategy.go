@@ -1,6 +1,8 @@
 package logger
 
-import "log"
+import (
+	"log"
+)
 
 // DebugLoggerStrategy is a logger strategy that only logs when debug mode is enabled.
 // It uses the standard Go log package with prefixed log levels.
@@ -11,7 +13,7 @@ type DebugLoggerStrategy struct {
 
 // NewDebugLoggerStrategy creates a new debug logger strategy.
 // The strategy will only log messages if debugEnabled is true.
-func NewDebugLoggerStrategy(debugEnabled bool) *DebugLoggerStrategy {
+func NewDebugLoggerStrategy(debugEnabled bool) ILoggerStrategy {
 	return &DebugLoggerStrategy{
 		debugEnabled: debugEnabled,
 	}

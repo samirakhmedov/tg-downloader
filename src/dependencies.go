@@ -123,16 +123,10 @@ func NewBotController(botService service.IBotService, videoService videoService.
 	return controller.NewBotController(botService, videoService, logger)
 }
 
-// NewDebugLoggerStrategy creates a debug logger strategy based on the configuration.
-// The strategy will only log messages if debug mode is enabled in the configuration.
-func NewDebugLoggerStrategy(cfg env.TGDownloader) logger.ILoggerStrategy {
-	return logger.NewDebugLoggerStrategy(cfg.Debug)
-}
-
 // NewLoggerStrategies creates a list of logger strategies.
 // Currently includes only the debug logger strategy, but can be extended with additional strategies.
-func NewLoggerStrategies(debugStrategy logger.ILoggerStrategy) []logger.ILoggerStrategy {
-	return []logger.ILoggerStrategy{debugStrategy}
+func NewLoggerStrategies(cfg env.TGDownloader) []logger.ILoggerStrategy {
+	return []logger.ILoggerStrategy{logger.NewDebugLoggerStrategy(cfg.Debug)}
 }
 
 // NewLogger creates a new Logger with the provided list of strategies.
