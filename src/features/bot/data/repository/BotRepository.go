@@ -112,6 +112,15 @@ func (r *BotRepository) SendGroupMessage(chatID int64, message string) error {
 	return err
 }
 
+func (r *BotRepository) SendGroupMessageWithID(chatID int64, message string) (int, error) {
+	msg := tgbotapi.NewMessage(chatID, message)
+	sentMsg, err := r.botApi.Send(msg)
+	if err != nil {
+		return 0, err
+	}
+	return sentMsg.MessageID, nil
+}
+
 func (r *BotRepository) UpdateDirectMessage(userID int64, messageID int, newText string) error {
 	edit := tgbotapi.NewEditMessageText(userID, messageID, newText)
 	_, err := r.botApi.Send(edit)
@@ -121,6 +130,12 @@ func (r *BotRepository) UpdateDirectMessage(userID int64, messageID int, newText
 func (r *BotRepository) UpdateGroupMessage(chatID int64, messageID int, newText string) error {
 	edit := tgbotapi.NewEditMessageText(chatID, messageID, newText)
 	_, err := r.botApi.Send(edit)
+	return err
+}
+
+func (r *BotRepository) DeleteGroupMessage(chatID int64, messageID int) error {
+	deleteConfig := tgbotapi.NewDeleteMessage(chatID, messageID)
+	_, err := r.botApi.Request(deleteConfig)
 	return err
 }
 

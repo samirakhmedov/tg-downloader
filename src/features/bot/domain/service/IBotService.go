@@ -15,7 +15,8 @@ type IBotService interface {
 	GetGroupCommands(groupID int64, userID int64, userName string) error
 	HandleDirectError(userID int64, userName string, message string) error
 	HandleGroupError(groupID int64, message string) error
-	LoadResource(groupID int64, link string) (bool, error)
-	HandleVideoProcessSuccess(groupID int64, fileName string) error
-	HandleVideoProcessFailure(groupID int64, errorMessage string) error
+	LoadResource(groupID int64, link string) (messageID int, canProcess bool, err error)
+	HandleVideoUploadStarted(groupID int64, messageID int) error
+	HandleVideoProcessSuccess(groupID int64, messageID int) error
+	HandleVideoProcessFailure(groupID int64, messageID int, errorMessage string) error
 }

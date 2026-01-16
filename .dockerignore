@@ -1,0 +1,66 @@
+# =============================================================================
+# Docker Build Context Exclusions
+# =============================================================================
+
+# Build artifacts
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Database files (should be mounted at runtime)
+*.db
+*.db-shm
+*.db-wal
+database.db*
+
+# Local binaries
+yt-dlp_macos
+yt-dlp_linux
+yt-dlp_windows*
+
+# Output and temp directories
+output/
+temp/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in container)
+*.md
+!config/templates/*.md
+LICENSE
+
+# Local environment files
+.env
+.env.*
+*.local
+
+# Cursor/Editor specific
+.cursor/
+.cursorignore
+
+# Go test cache and build cache
+.cache/
+
+# Generated files (will be regenerated in build)
+env/
+
+# Pkl evaluation output (regenerated during build)
+# Keep config/ but the env/ generated code is rebuilt

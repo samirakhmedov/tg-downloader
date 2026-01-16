@@ -8,10 +8,18 @@ type VideoEvent interface {
 	isVideoEvent()
 }
 
+// VideoUploadStarted event for when video upload to Telegram starts
+type VideoUploadStarted struct {
+	GroupID   int64
+	MessageID int
+}
+
+func (VideoUploadStarted) isVideoEvent() {}
+
 // VideoProcessSuccess event for successful video processing
 type VideoProcessSuccess struct {
-	GroupID  int64
-	FileName string
+	GroupID   int64
+	MessageID int
 }
 
 func (VideoProcessSuccess) isVideoEvent() {}
@@ -19,6 +27,7 @@ func (VideoProcessSuccess) isVideoEvent() {}
 // VideoProcessFailure event for failed video processing
 type VideoProcessFailure struct {
 	GroupID      int64
+	MessageID    int
 	ErrorMessage string
 }
 

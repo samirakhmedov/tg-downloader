@@ -1,0 +1,66 @@
+# =============================================================================
+# Docker Compose for tg-downloader
+# =============================================================================
+# Usage:
+#   docker compose up -d          # Start with default config
+#   docker compose up -d --build  # Rebuild and start
+#   docker compose logs -f        # View logs
+#   docker compose down           # Stop and remove containers
+# =============================================================================
+
+services:
+  tg-downloader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tg-downloader:latest
+    container_name: tg-downloader
+    restart: unless-stopped
+    
+    # Mount custom configuration (create your own Config.pkl from Example.pkl)
+    volumes:
+      # Configuration file - mount your own config with your bot token
+      - ./config/Config.pkl:/app/config/Config.pkl:ro
+      
+      # Configuration templates (read-only, for Pkl amends)
+      - ./config/templates:/app/config/templates:ro
+      
+      # Persistent database storage
+      - tg-downloader-data:/app/data
+      
+      # Video output directory (optional - for accessing downloaded videos)
+      - ./output:/app/output
+    
+    # Environment variables (optional overrides)
+    environment:
+      - TZ=UTC
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "tg-downloader"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Logging configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volumes for persistent data
+volumes:
+  tg-downloader-data:
+    driver: local

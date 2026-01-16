@@ -21,12 +21,12 @@ func NewTaskRepository(database *ent.Client) repository.ITaskRepository {
 	}
 }
 
-func (r *TaskRepository) CreateTask(link string, groupID int64) (*entity.Task, error) {
+func (r *TaskRepository) CreateTask(link string, groupID int64, messageID int) (*entity.Task, error) {
 	// Check if task with this link already exists
 	existingTask, err := r.FindTaskByLink(link)
 	if err == nil {
 		// Task exists, add group to it
-		err = r.AddGroupToTask(existingTask.ID, groupID)
+		err = r.AddGroupToTask(existingTask.ID, groupID, messageID)
 		if err != nil {
 			return nil, err
 		}
@@ -34,10 +34,13 @@ func (r *TaskRepository) CreateTask(link string, groupID int64) (*entity.Task, e
 		return r.FindTaskByLink(link)
 	}
 
-	// Create new task
+	// Create new task with statusMessageIDs map
+	statusMessageIDs := map[int64]int{groupID: messageID}
+
 	dbTask, err := r.database.Task.Create().
 		SetLink(link).
 		SetGroupIDs([]int64{groupID}).
+		SetStatusMessageIDs(statusMessageIDs).
 		SetStatus(string(entity.TaskStatusPending)).
 		Save(context.Background())
 
@@ -93,7 +96,7 @@ func (r *TaskRepository) FindTaskByLink(link string) (*entity.Task, error) {
 	return &domainTask, nil
 }
 
-func (r *TaskRepository) AddGroupToTask(taskID int, groupID int64) error {
+func (r *TaskRepository) AddGroupToTask(taskID int, groupID int64, messageID int) error {
 	// Get current task
 	dbTask, err := r.database.Task.Get(context.Background(), taskID)
 	if err != nil {
@@ -110,9 +113,17 @@ func (r *TaskRepository) AddGroupToTask(taskID int, groupID int64) error {
 	// Add new group ID
 	updatedGroupIDs := append(dbTask.GroupIDs, groupID)
 
-	// Update task with new group IDs
+	// Update statusMessageIDs map
+	updatedStatusMessageIDs := dbTask.StatusMessageIDs
+	if updatedStatusMessageIDs == nil {
+		updatedStatusMessageIDs = make(map[int64]int)
+	}
+	updatedStatusMessageIDs[groupID] = messageID
+
+	// Update task with new group IDs and statusMessageIDs
 	_, err = r.database.Task.UpdateOneID(taskID).
 		SetGroupIDs(updatedGroupIDs).
+		SetStatusMessageIDs(updatedStatusMessageIDs).
 		Save(context.Background())
 
 	return err

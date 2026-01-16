@@ -59,10 +59,12 @@ src/
 2. **Configure the bot**:
    Create `config/Config.pkl` with your bot token and settings:
    ```pkl
-   botConfiguration {
+   telegramConfiguration {
        tgBotApiKey = "YOUR_BOT_TOKEN_HERE"
        updateTimeout = 0
+       updateOffset = 0
        updateLimit = 2
+       botName = "your_bot_name"
    }
 
    authConfiguration { ... }

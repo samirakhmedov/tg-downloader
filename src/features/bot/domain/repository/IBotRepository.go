@@ -12,9 +12,12 @@ type IBotRepository interface {
 
 	SendDirectMessage(userID int64, message string) error
 	SendGroupMessage(chatID int64, message string) error
+	SendGroupMessageWithID(chatID int64, message string) (int, error)
 
 	UpdateDirectMessage(userID int64, messageID int, newText string) error
 	UpdateGroupMessage(chatID int64, messageID int, newText string) error
+
+	DeleteGroupMessage(chatID int64, messageID int) error
 
 	GetChatInfo(chatID int64) (*entity.ChatInfo, error)
 }

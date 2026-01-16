@@ -113,14 +113,14 @@ func (c *BotController) handleBusinessLogic(event entity.BotEvent) {
 	case entity.StartBot:
 		c.service.GetDirectCommands(e.UserID, e.UserName)
 	case entity.GetResource:
-		canProcess, err := c.service.LoadResource(e.GroupID, e.Link)
+		messageID, canProcess, err := c.service.LoadResource(e.GroupID, e.Link)
 		if err != nil {
 			// Error already handled by service (message sent to user)
 			return
 		}
 		if canProcess {
-			// Start video processing
-			c.videoService.ProcessVideo(e.Link, e.GroupID)
+			// Start video processing with status message ID for updates
+			c.videoService.ProcessVideo(e.Link, e.GroupID, messageID)
 		}
 	case entity.DirectGetBotCommands:
 		c.service.GetDirectCommands(e.UserID, e.UserName)
@@ -148,17 +148,25 @@ func (c *BotController) processVideoEvents() {
 
 func (c *BotController) handleVideoEvent(event videoEntity.VideoEvent) {
 	switch e := event.(type) {
+	case videoEntity.VideoUploadStarted:
+		c.logger.Debug(fmt.Sprintf("Received upload started event for group %d, messageID=%d", e.GroupID, e.MessageID))
+		err := c.service.HandleVideoUploadStarted(e.GroupID, e.MessageID)
+		if err != nil {
+			c.logger.Error(fmt.Sprintf("HandleVideoUploadStarted failed: %v", err))
+		} else {
+			c.logger.Debug("HandleVideoUploadStarted completed successfully")
+		}
 	case videoEntity.VideoProcessSuccess:
-		c.logger.Debug(fmt.Sprintf("Received video success event for group %d with fileName=%s", e.GroupID, e.FileName))
-		err := c.service.HandleVideoProcessSuccess(e.GroupID, e.FileName)
+		c.logger.Debug(fmt.Sprintf("Received video success event for group %d, messageID=%d", e.GroupID, e.MessageID))
+		err := c.service.HandleVideoProcessSuccess(e.GroupID, e.MessageID)
 		if err != nil {
 			c.logger.Error(fmt.Sprintf("HandleVideoProcessSuccess failed: %v", err))
 		} else {
 			c.logger.Debug("HandleVideoProcessSuccess completed successfully")
 		}
 	case videoEntity.VideoProcessFailure:
-		c.logger.Debug(fmt.Sprintf("Received video failure event for group %d with error=%s", e.GroupID, e.ErrorMessage))
-		err := c.service.HandleVideoProcessFailure(e.GroupID, e.ErrorMessage)
+		c.logger.Debug(fmt.Sprintf("Received video failure event for group %d, messageID=%d, error=%s", e.GroupID, e.MessageID, e.ErrorMessage))
+		err := c.service.HandleVideoProcessFailure(e.GroupID, e.MessageID, e.ErrorMessage)
 		if err != nil {
 			c.logger.Error(fmt.Sprintf("HandleVideoProcessFailure failed: %v", err))
 		} else {

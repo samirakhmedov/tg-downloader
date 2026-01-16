@@ -15,9 +15,10 @@ import (
 )
 
 type VideoTask struct {
-	ID       int
-	Link     string
-	GroupIDs []int64
+	ID               int
+	Link             string
+	GroupIDs         []int64
+	StatusMessageIDs map[int64]int // groupID -> messageID for status messages
 }
 
 type VideoService struct {
@@ -94,8 +95,8 @@ func (s *VideoService) StopWorkers() {
 	s.logger.Debug("VideoService stopped")
 }
 
-func (s *VideoService) ProcessVideo(link string, groupID int64) error {
-	_, err := s.taskRepo.CreateTask(link, groupID)
+func (s *VideoService) ProcessVideo(link string, groupID int64, messageID int) error {
+	_, err := s.taskRepo.CreateTask(link, groupID, messageID)
 	return err
 }
 
@@ -148,7 +149,7 @@ func (s *VideoService) scheduleAvailableTasks() {
 		// Try to queue the task (non-blocking)
 		s.logger.Debug(fmt.Sprintf("Attempting to queue task %d", task.ID))
 		select {
-		case s.taskQueue <- VideoTask{ID: task.ID, Link: task.Link, GroupIDs: task.GroupIDs}:
+		case s.taskQueue <- VideoTask{ID: task.ID, Link: task.Link, GroupIDs: task.GroupIDs, StatusMessageIDs: task.StatusMessageIDs}:
 			// Task queued successfully
 			s.logger.Debug(fmt.Sprintf("Queued task %d for processing in %d groups", task.ID, len(task.GroupIDs)))
 		default:
@@ -175,12 +176,12 @@ func (s *VideoService) worker() {
 		case task := <-s.taskQueue:
 			// Process the task
 			s.logger.Debug(fmt.Sprintf("Worker processing task %d for groups %v", task.ID, task.GroupIDs))
-			s.processTask(task.ID, task.Link, task.GroupIDs)
+			s.processTask(task.ID, task.Link, task.GroupIDs, task.StatusMessageIDs)
 		}
 	}
 }
 
-func (s *VideoService) processTask(taskID int, link string, groupIDs []int64) {
+func (s *VideoService) processTask(taskID int, link string, groupIDs []int64, statusMessageIDs map[int64]int) {
 	s.logger.Debug(fmt.Sprintf("Starting to process task %d with link: %s for groups: %v", taskID, link, groupIDs))
 
 	_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -190,7 +191,7 @@ func (s *VideoService) processTask(taskID int, link string, groupIDs []int64) {
 	isValid, platformName, err := s.downloadRepo.ValidateURL(link)
 	if err != nil || !isValid {
 		s.logger.Debug(fmt.Sprintf("URL validation failed for task %d: %v", taskID, err))
-		s.handleTaskFailure(taskID, groupIDs, fmt.Sprintf("Invalid URL: %v", err))
+		s.handleTaskFailure(taskID, groupIDs, statusMessageIDs, fmt.Sprintf("Invalid URL: %v", err))
 		return
 	}
 
@@ -206,11 +207,25 @@ func (s *VideoService) processTask(taskID int, link string, groupIDs []int64) {
 		if result != nil {
 			s.logger.Debug(fmt.Sprintf("Download result error: %v", result.Error))
 		}
-		s.handleTaskFailure(taskID, groupIDs, fmt.Sprintf("Download failed: %v", result.Error))
+		s.handleTaskFailure(taskID, groupIDs, statusMessageIDs, fmt.Sprintf("Download failed: %v", result.Error))
 		return
 	}
 
 	s.logger.Debug(fmt.Sprintf("Download successful for task %d, file: %s", taskID, result.FilePath))
+
+	// Emit upload started events for all groups
+	for _, groupID := range groupIDs {
+		messageID := statusMessageIDs[groupID]
+		if messageID > 0 {
+			s.logger.Debug(fmt.Sprintf("Emitting upload started event for group %d", groupID))
+			select {
+			case s.eventChannel <- entity.VideoUploadStarted{GroupID: groupID, MessageID: messageID}:
+				s.logger.Debug(fmt.Sprintf("Successfully emitted upload started event for group %d", groupID))
+			default:
+				s.logger.Warn(fmt.Sprintf("Event channel is full, dropping upload started event for group %d", groupID))
+			}
+		}
+	}
 
 	// Upload to all groups
 	uploadCount := 0
@@ -231,11 +246,11 @@ func (s *VideoService) processTask(taskID int, link string, groupIDs []int64) {
 	os.Remove(result.FilePath)
 
 	s.logger.Debug(fmt.Sprintf("Calling success handler for task %d with %d successful uploads", taskID, uploadCount))
-	s.handleTaskSuccess(taskID, groupIDs, result.FileName)
+	s.handleTaskSuccess(taskID, groupIDs, statusMessageIDs)
 }
 
-func (s *VideoService) handleTaskSuccess(taskID int, groupIDs []int64, fileName string) {
-	s.logger.Debug(fmt.Sprintf("handleTaskSuccess called for task %d, groups %v, file %s", taskID, groupIDs, fileName))
+func (s *VideoService) handleTaskSuccess(taskID int, groupIDs []int64, statusMessageIDs map[int64]int) {
+	s.logger.Debug(fmt.Sprintf("handleTaskSuccess called for task %d, groups %v", taskID, groupIDs))
 
 	// Delete completed task
 	if err := s.taskRepo.DeleteTask(taskID); err != nil {
@@ -246,19 +261,20 @@ func (s *VideoService) handleTaskSuccess(taskID int, groupIDs []int64, fileName 
 
 	// Emit success events for all groups
 	for _, groupID := range groupIDs {
-		s.logger.Debug(fmt.Sprintf("Emitting success event for group %d with fileName=%s", groupID, fileName))
+		messageID := statusMessageIDs[groupID]
+		s.logger.Debug(fmt.Sprintf("Emitting success event for group %d with messageID=%d", groupID, messageID))
 		select {
-		case s.eventChannel <- entity.VideoProcessSuccess{GroupID: groupID, FileName: fileName}:
+		case s.eventChannel <- entity.VideoProcessSuccess{GroupID: groupID, MessageID: messageID}:
 			s.logger.Debug(fmt.Sprintf("Successfully emitted success event for group %d", groupID))
 		default:
 			s.logger.Warn(fmt.Sprintf("Event channel is full, dropping success event for group %d", groupID))
 		}
 	}
 
-	s.logger.Debug(fmt.Sprintf("Successfully processed video for groups %v: %s", groupIDs, fileName))
+	s.logger.Debug(fmt.Sprintf("Successfully processed video for groups %v", groupIDs))
 }
 
-func (s *VideoService) handleTaskFailure(taskID int, groupIDs []int64, errorMessage string) {
+func (s *VideoService) handleTaskFailure(taskID int, groupIDs []int64, statusMessageIDs map[int64]int, errorMessage string) {
 	s.logger.Debug(fmt.Sprintf("handleTaskFailure called for task %d, groups %v, error: %s", taskID, groupIDs, errorMessage))
 
 	// Delete failed task
@@ -270,9 +286,10 @@ func (s *VideoService) handleTaskFailure(taskID int, groupIDs []int64, errorMess
 
 	// Emit failure events for all groups
 	for _, groupID := range groupIDs {
-		s.logger.Debug(fmt.Sprintf("Emitting failure event for group %d with error=%s", groupID, errorMessage))
+		messageID := statusMessageIDs[groupID]
+		s.logger.Debug(fmt.Sprintf("Emitting failure event for group %d with messageID=%d, error=%s", groupID, messageID, errorMessage))
 		select {
-		case s.eventChannel <- entity.VideoProcessFailure{GroupID: groupID, ErrorMessage: errorMessage}:
+		case s.eventChannel <- entity.VideoProcessFailure{GroupID: groupID, MessageID: messageID, ErrorMessage: errorMessage}:
 			s.logger.Debug(fmt.Sprintf("Successfully emitted failure event for group %d", groupID))
 		default:
 			s.logger.Warn(fmt.Sprintf("Event channel is full, dropping failure event for group %d", groupID))

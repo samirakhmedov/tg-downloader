@@ -15,6 +15,7 @@ func (Task) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("link").NotEmpty().Unique(),
 		field.JSON("groupIDs", []int64{}),
+		field.JSON("statusMessageIDs", map[int64]int{}).Optional(),
 		field.String("status").Default("pending"),
 	}
 }

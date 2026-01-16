@@ -12,8 +12,9 @@ const (
 
 // Task represents a video processing task
 type Task struct {
-	ID       int
-	Link     string
-	GroupIDs []int64
-	Status   TaskStatus
+	ID               int
+	Link             string
+	GroupIDs         []int64
+	StatusMessageIDs map[int64]int // groupID -> messageID for status messages
+	Status           TaskStatus
 }

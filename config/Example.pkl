@@ -1,9 +1,11 @@
 amends "templates/TgDownloaderConfig.pkl"
 
-botConfiguration {
+telegramConfiguration {
     tgBotApiKey = "PASTE KEY HERE"
 
     updateTimeout = 0
+
+    updateOffset = 0
 
     updateLimit = 2
 

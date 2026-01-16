@@ -24,10 +24,11 @@ type taskToDbTaskCodec struct{}
 
 func (c *taskToDbTaskCodec) Convert(source ent.Task) entity.Task {
 	return entity.Task{
-		ID:       source.ID,
-		Link:     source.Link,
-		GroupIDs: source.GroupIDs,
-		Status:   entity.TaskStatus(source.Status),
+		ID:               source.ID,
+		Link:             source.Link,
+		GroupIDs:         source.GroupIDs,
+		StatusMessageIDs: source.StatusMessageIDs,
+		Status:           entity.TaskStatus(source.Status),
 	}
 }
 
@@ -35,9 +36,10 @@ type dbTaskToTaskCodec struct{}
 
 func (c *dbTaskToTaskCodec) Convert(source entity.Task) ent.Task {
 	return ent.Task{
-		ID:       source.ID,
-		Link:     source.Link,
-		GroupIDs: source.GroupIDs,
-		Status:   string(source.Status),
+		ID:               source.ID,
+		Link:             source.Link,
+		GroupIDs:         source.GroupIDs,
+		StatusMessageIDs: source.StatusMessageIDs,
+		Status:           string(source.Status),
 	}
 }

@@ -490,21 +490,21 @@ func (s *BotService) formatCommandList(commands []entity.Command, context string
 	return builder.String()
 }
 
-func (s *BotService) LoadResource(groupID int64, link string) (bool, error) {
+func (s *BotService) LoadResource(groupID int64, link string) (int, bool, error) {
 	// Check if group is activated first
 	groupIDStr := strconv.FormatInt(groupID, 10)
 	_, err := s.cacheRepo.GetGroup(groupIDStr)
 	if err != nil {
 		// Group is not activated
 		err := s.sendGroupMessage(groupID, "❌ Group is not activated. Use /a to activate the group first.")
-		return false, err
+		return 0, false, err
 	}
 
 	// Validate URL format
 	urlRegex := regexp.MustCompile(core.URLRegexPattern)
 	if !urlRegex.MatchString(link) {
 		err := s.sendGroupMessage(groupID, "❌ Invalid URL format")
-		return false, err
+		return 0, false, err
 	}
 
 	// Check against supported patterns
@@ -531,22 +531,30 @@ func (s *BotService) LoadResource(groupID int64, link string) (bool, error) {
 		}
 
 		err := s.sendGroupMessage(groupID, fmt.Sprintf("❌ Unsupported video format. Supported formats:\n%s", supportedFormats))
-		return false, err
+		return 0, false, err
 	}
 
-	// Send confirmation that processing started
-	err = s.sendGroupMessage(groupID, "🔄 Processing video... Please wait.")
-	return true, err
+	// Send confirmation that processing started, get message ID for later updates
+	messageID, err := s.botRepo.SendGroupMessageWithID(groupID, "⏳ Скачивание видео...")
+	if err != nil {
+		return 0, false, err
+	}
+	return messageID, true, nil
 }
 
-func (s *BotService) HandleVideoProcessSuccess(groupID int64, fileName string) error {
-	message := fmt.Sprintf("✅ Video processed successfully: %s", fileName)
-	return s.sendGroupMessage(groupID, message)
+func (s *BotService) HandleVideoUploadStarted(groupID int64, messageID int) error {
+	return s.botRepo.UpdateGroupMessage(groupID, messageID, "📤 Отправка в Telegram...")
 }
 
-func (s *BotService) HandleVideoProcessFailure(groupID int64, errorMessage string) error {
-	message := fmt.Sprintf("❌ Video processing failed: %s", errorMessage)
-	return s.sendGroupMessage(groupID, message)
+func (s *BotService) HandleVideoProcessSuccess(groupID int64, messageID int) error {
+	// Delete the status message - the video itself is the success indicator
+	return s.botRepo.DeleteGroupMessage(groupID, messageID)
+}
+
+func (s *BotService) HandleVideoProcessFailure(groupID int64, messageID int, errorMessage string) error {
+	// Update the status message with error details
+	message := fmt.Sprintf("❌ Ошибка: %s", errorMessage)
+	return s.botRepo.UpdateGroupMessage(groupID, messageID, message)
 }
 
 func (s *BotService) sendDirectMessage(userID int64, message string) error {

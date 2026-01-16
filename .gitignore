@@ -5,7 +5,5 @@ ent
 output
 database.db
 config/Config.pkl
-Dockerfile
-.dockerignore
 !ent/schema/*.go
 !ent/generate.go
