@@ -14,6 +14,8 @@ import (
 	controller "tg-downloader/src/features/bot/interface"
 	systemRepo "tg-downloader/src/features/system/data/repository"
 	iSystemRepo "tg-downloader/src/features/system/domain/repository"
+	mediaRepo "tg-downloader/src/features/media/data/repository"
+	iMediaRepo "tg-downloader/src/features/media/domain/repository"
 	videoRepo "tg-downloader/src/features/video/data/repository"
 	iVideoRepo "tg-downloader/src/features/video/domain/repository"
 	videoService "tg-downloader/src/features/video/domain/service"
@@ -107,16 +109,20 @@ func NewTaskRepository(database *ent.Client) i.ITaskRepository {
 	return repository.NewTaskRepository(database)
 }
 
-func NewVideoDownloadRepository(cfg env.TGDownloader) iVideoRepo.IVideoDownloadRepository {
-	return videoRepo.NewVideoDownloadRepository(cfg)
+func NewVideoDownloadRepository(cfg env.TGDownloader, log *logger.Logger) iVideoRepo.IVideoDownloadRepository {
+	return videoRepo.NewVideoDownloadRepository(cfg, log)
 }
 
-func NewUploadRepository(botApi *tgbotapi.BotAPI) iVideoRepo.IUploadRepository {
-	return videoRepo.NewUploadRepository(botApi)
+func NewUploadRepository(botApi *tgbotapi.BotAPI, cfg env.TGDownloader) iVideoRepo.IUploadRepository {
+	return videoRepo.NewUploadRepository(botApi, cfg.VideoDownloaderConfiguration.UploadTimeoutSeconds)
 }
 
-func NewVideoService(cfg env.TGDownloader, taskRepo i.ITaskRepository, downloadRepo iVideoRepo.IVideoDownloadRepository, uploadRepo iVideoRepo.IUploadRepository, logger *logger.Logger) videoService.IVideoService {
-	return videoService.NewVideoService(cfg, taskRepo, downloadRepo, uploadRepo, logger)
+func NewMediaUploadRepository(botApi *tgbotapi.BotAPI, cfg env.TGDownloader) iMediaRepo.IMediaUploadRepository {
+	return mediaRepo.NewMediaUploadRepository(botApi, cfg.VideoDownloaderConfiguration.UploadTimeoutSeconds)
+}
+
+func NewVideoService(cfg env.TGDownloader, taskRepo i.ITaskRepository, downloadRepo iVideoRepo.IVideoDownloadRepository, uploadRepo iVideoRepo.IUploadRepository, mediaUploadRepo iMediaRepo.IMediaUploadRepository, logger *logger.Logger) videoService.IVideoService {
+	return videoService.NewVideoService(cfg, taskRepo, downloadRepo, uploadRepo, mediaUploadRepo, logger)
 }
 
 func NewBotController(botService service.IBotService, videoService videoService.IVideoService, logger *logger.Logger) controller.IBotController {

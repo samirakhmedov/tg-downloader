@@ -47,6 +47,9 @@ func main() {
 			src.NewUploadRepository,
 		),
 		fx.Provide(
+			src.NewMediaUploadRepository,
+		),
+		fx.Provide(
 			src.NewBotService,
 		),
 		fx.Provide(

@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"tg-downloader/env"
-	"tg-downloader/src/core"
 	"tg-downloader/src/core/logger"
 	botRepo "tg-downloader/src/features/bot/domain/repository"
+	mediaEntity "tg-downloader/src/features/media/domain/entity"
+	iMediaRepo "tg-downloader/src/features/media/domain/repository"
+	videoDataRepo "tg-downloader/src/features/video/data/repository"
 	"tg-downloader/src/features/video/domain/entity"
 	"tg-downloader/src/features/video/domain/repository"
 	"time"
@@ -22,17 +25,18 @@ type VideoTask struct {
 }
 
 type VideoService struct {
-	environment  env.TGDownloader
-	taskRepo     botRepo.ITaskRepository
-	downloadRepo repository.IVideoDownloadRepository
-	uploadRepo   repository.IUploadRepository
-	taskQueue    chan VideoTask
-	stopChannel  chan struct{}
-	eventChannel chan entity.VideoEvent
-	wg           sync.WaitGroup
-	running      bool
-	mutex        sync.RWMutex
-	logger       *logger.Logger
+	environment     env.TGDownloader
+	taskRepo        botRepo.ITaskRepository
+	downloadRepo    repository.IVideoDownloadRepository
+	uploadRepo      repository.IUploadRepository
+	mediaUploadRepo iMediaRepo.IMediaUploadRepository
+	taskQueue       chan VideoTask
+	stopChannel     chan struct{}
+	eventChannel    chan entity.VideoEvent
+	wg              sync.WaitGroup
+	running         bool
+	mutex           sync.RWMutex
+	logger          *logger.Logger
 }
 
 // NewVideoService creates a new VideoService with all required dependencies.
@@ -42,18 +46,20 @@ func NewVideoService(
 	taskRepo botRepo.ITaskRepository,
 	downloadRepo repository.IVideoDownloadRepository,
 	uploadRepo repository.IUploadRepository,
+	mediaUploadRepo iMediaRepo.IMediaUploadRepository,
 	logger *logger.Logger,
 ) *VideoService {
 	return &VideoService{
-		environment:  environment,
-		taskRepo:     taskRepo,
-		downloadRepo: downloadRepo,
-		uploadRepo:   uploadRepo,
-		taskQueue:    make(chan VideoTask, environment.WorkerConfiguration.WorkerCount),
-		stopChannel:  make(chan struct{}),
-		eventChannel: make(chan entity.VideoEvent, 100),
-		running:      false,
-		logger:       logger,
+		environment:     environment,
+		taskRepo:        taskRepo,
+		downloadRepo:    downloadRepo,
+		uploadRepo:      uploadRepo,
+		mediaUploadRepo: mediaUploadRepo,
+		taskQueue:       make(chan VideoTask, environment.WorkerConfiguration.WorkerCount),
+		stopChannel:     make(chan struct{}),
+		eventChannel:    make(chan entity.VideoEvent, 100),
+		running:         false,
+		logger:          logger,
 	}
 }
 
@@ -100,6 +106,19 @@ func (s *VideoService) ProcessVideo(link string, groupID int64, messageID int) e
 	return err
 }
 
+func (s *VideoService) IsTaskExistsForGroup(link string, groupID int64) bool {
+	task, err := s.taskRepo.FindTaskByLink(link)
+	if err != nil {
+		return false
+	}
+	for _, gid := range task.GroupIDs {
+		if gid == groupID {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *VideoService) GetVideoEvents() entity.VideoEvents {
 	return s.eventChannel
 }
@@ -116,16 +135,20 @@ func (s *VideoService) taskScheduler() {
 			return
 		case <-ticker.C:
 			// Wake up all idle workers to check for tasks
-			s.scheduleAvailableTasks()
+			s.ScheduleAvailableTasks()
 		}
 	}
 }
 
-func (s *VideoService) scheduleAvailableTasks() {
+// ScheduleAvailableTasks fetches pending tasks and queues them for workers.
+// It stops after the first blocked send when taskQueue is full (labeled-break).
+// Exported so tests can verify the labeled-break behavior directly.
+func (s *VideoService) ScheduleAvailableTasks() {
 	s.logger.Debug("scheduleAvailableTasks called")
 
 	// Get all available tasks and queue them for workers
 	taskCount := 0
+scheduleLoop:
 	for {
 		s.logger.Debug(fmt.Sprintf("Attempting to get next task (iteration %d)", taskCount))
 		task, err := s.taskRepo.GetNextTask()
@@ -155,7 +178,7 @@ func (s *VideoService) scheduleAvailableTasks() {
 		default:
 			// Queue is full, task will be picked up in next cycle
 			s.logger.Debug(fmt.Sprintf("Task queue is full, task %d will be processed in next cycle", task.ID))
-			break
+			break scheduleLoop
 		}
 	}
 
@@ -184,34 +207,60 @@ func (s *VideoService) worker() {
 func (s *VideoService) processTask(taskID int, link string, groupIDs []int64, statusMessageIDs map[int64]int) {
 	s.logger.Debug(fmt.Sprintf("Starting to process task %d with link: %s for groups: %v", taskID, link, groupIDs))
 
-	_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	// Validate URL first
-	isValid, platformName, err := s.downloadRepo.ValidateURL(link)
+	isValid, platform, err := s.downloadRepo.ValidateURL(link)
 	if err != nil || !isValid {
 		s.logger.Debug(fmt.Sprintf("URL validation failed for task %d: %v", taskID, err))
 		s.handleTaskFailure(taskID, groupIDs, statusMessageIDs, fmt.Sprintf("Invalid URL: %v", err))
 		return
 	}
 
-	s.logger.Debug(fmt.Sprintf("Processing %s video: %s", platformName, link))
+	s.logger.Debug(fmt.Sprintf("Processing %s video: %s", platform.Name, link))
 
-	// Download video to a shared directory (use first group ID for directory)
-	outputDir := fmt.Sprintf("%s/shared", core.VideoOutputDirectory)
-	s.logger.Debug(fmt.Sprintf("Starting download for task %d to directory: %s", taskID, outputDir))
+	// Per-task temp directory with guaranteed cleanup on all exit paths
+	tempDir, err := os.MkdirTemp("", "tg-dl-*")
+	if err != nil {
+		s.handleTaskFailure(taskID, groupIDs, statusMessageIDs, "Internal error: could not create temp directory")
+		return
+	}
+	s.logger.Debug(fmt.Sprintf("Task %d temp dir: %s", taskID, tempDir))
+	defer os.RemoveAll(tempDir)
 
-	result, err := s.downloadRepo.DownloadVideo(link, outputDir)
+	s.logger.Debug(fmt.Sprintf("Starting download for task %d to directory: %s", taskID, tempDir))
+
+	result, err := s.downloadRepo.DownloadVideo(link, tempDir, platform)
 	if err != nil || !result.Success {
 		s.logger.Debug(fmt.Sprintf("Download failed for task %d: %v", taskID, err))
 		if result != nil {
 			s.logger.Debug(fmt.Sprintf("Download result error: %v", result.Error))
 		}
-		s.handleTaskFailure(taskID, groupIDs, statusMessageIDs, fmt.Sprintf("Download failed: %v", result.Error))
+		s.handleTaskFailure(taskID, groupIDs, statusMessageIDs, classifyDownloadError(result.Error))
 		return
 	}
 
-	s.logger.Debug(fmt.Sprintf("Download successful for task %d, file: %s", taskID, result.FilePath))
+	s.logger.Debug(fmt.Sprintf("Download successful for task %d, classifying output dir", taskID))
+
+	// After download succeeds, classify what was downloaded
+	items, scanErr := videoDataRepo.ClassifyOutputDir(tempDir)
+	if scanErr != nil || len(items) == 0 {
+		s.logger.Debug(fmt.Sprintf("No media files found in output dir for task %d", taskID))
+		s.handleTaskFailure(taskID, groupIDs, statusMessageIDs, classifyDownloadError(nil))
+		return
+	}
+
+	// Count images and videos
+	var images []mediaEntity.MediaItem
+	var videos []mediaEntity.MediaItem
+	for _, item := range items {
+		switch item.Type {
+		case mediaEntity.MediaTypePhoto:
+			images = append(images, item)
+		case mediaEntity.MediaTypeVideo:
+			videos = append(videos, item)
+		}
+	}
+
+	s.logger.Debug(fmt.Sprintf("Task %d classified: %d images, %d videos", taskID, len(images), len(videos)))
 
 	// Emit upload started events for all groups
 	for _, groupID := range groupIDs {
@@ -227,25 +276,37 @@ func (s *VideoService) processTask(taskID int, link string, groupIDs []int64, st
 		}
 	}
 
-	// Upload to all groups
-	uploadCount := 0
-	for _, groupID := range groupIDs {
-		s.logger.Debug(fmt.Sprintf("Uploading to group %d", groupID))
-		err = s.uploadRepo.UploadVideo(result.FilePath, groupID)
-		if err != nil {
-			s.logger.Debug(fmt.Sprintf("Failed to upload to group %d: %v", groupID, err))
-			// Continue uploading to other groups
-		} else {
-			uploadCount++
-			s.logger.Debug(fmt.Sprintf("Successfully uploaded to group %d", groupID))
+	// Route based on classification
+	if len(images) == 0 && len(videos) > 0 {
+		// Pure video — existing UploadVideo path (uses first/only video file)
+		s.logger.Debug(fmt.Sprintf("Routing task %d to video upload path", taskID))
+		for _, groupID := range groupIDs {
+			s.logger.Debug(fmt.Sprintf("Uploading video to group %d", groupID))
+			if err := s.uploadRepo.UploadVideo(context.Background(), videos[0].FilePath, groupID); err != nil {
+				s.logger.Debug(fmt.Sprintf("Failed to upload video to group %d: %v", groupID, err))
+			}
+		}
+	} else if len(images) == 1 && len(videos) == 0 {
+		// Single photo — use UploadPhoto
+		s.logger.Debug(fmt.Sprintf("Routing task %d to single photo upload path", taskID))
+		for _, groupID := range groupIDs {
+			s.logger.Debug(fmt.Sprintf("Uploading photo to group %d", groupID))
+			if err := s.mediaUploadRepo.UploadPhoto(context.Background(), images[0].FilePath, groupID); err != nil {
+				s.logger.Debug(fmt.Sprintf("Failed to upload photo to group %d: %v", groupID, err))
+			}
+		}
+	} else {
+		// Album — multi-image, or mixed photo+video
+		s.logger.Debug(fmt.Sprintf("Routing task %d to album upload path (%d items)", taskID, len(items)))
+		for _, groupID := range groupIDs {
+			s.logger.Debug(fmt.Sprintf("Uploading album to group %d", groupID))
+			if err := s.mediaUploadRepo.UploadAlbum(context.Background(), items, groupID); err != nil {
+				s.logger.Debug(fmt.Sprintf("Failed to upload album to group %d: %v", groupID, err))
+			}
 		}
 	}
 
-	// Success - clean up and notify all groups
-	s.logger.Debug(fmt.Sprintf("Cleaning up file: %s", result.FilePath))
-	os.Remove(result.FilePath)
-
-	s.logger.Debug(fmt.Sprintf("Calling success handler for task %d with %d successful uploads", taskID, uploadCount))
+	// Temp dir cleanup is handled by the deferred os.RemoveAll(tempDir) above
 	s.handleTaskSuccess(taskID, groupIDs, statusMessageIDs)
 }
 
@@ -298,3 +359,32 @@ func (s *VideoService) handleTaskFailure(taskID int, groupIDs []int64, statusMes
 
 	s.logger.Debug(fmt.Sprintf("Failed to process video for groups %v: %s", groupIDs, errorMessage))
 }
+
+// ClassifyDownloadError translates yt-dlp error strings into user-facing messages.
+// All messages are in English per user decision.
+// Exported so tests can verify each error classification branch directly.
+func ClassifyDownloadError(err error) string {
+	if err == nil {
+		return "Download failed. Please try again later."
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "context deadline exceeded"):
+		return "Download timed out. Please try again later."
+	case strings.Contains(msg, "Private video"),
+		strings.Contains(msg, "This video is private"):
+		return "This video is private and cannot be downloaded."
+	case strings.Contains(msg, "Unsupported URL"),
+		strings.Contains(msg, "is not a supported URL"):
+		return "This URL is not supported."
+	case strings.Contains(msg, "Failed to resolve"),
+		strings.Contains(msg, "Temporary failure in name resolution"),
+		strings.Contains(msg, "Unable to download webpage"):
+		return "Download failed due to a network error. Please try again."
+	default:
+		return "Download failed. Please try again later."
+	}
+}
+
+// classifyDownloadError is the unexported alias used internally by processTask.
+var classifyDownloadError = ClassifyDownloadError
