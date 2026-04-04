@@ -38,4 +38,3 @@ run:
 clean:
 	rm -rf build
 	rm -rf env
-	rm -rf go.sum
