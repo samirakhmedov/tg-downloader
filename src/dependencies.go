@@ -103,11 +103,11 @@ func NewSystemRepository() iSystemRepo.ISystemRepository {
 	return systemRepo.NewSystemRepository()
 }
 
-func NewPOTokenChecker(cfg env.TGDownloader, lc fx.Lifecycle, log *logger.Logger) iPotTokenRepo.IPOTokenChecker {
+func NewPOTokenChecker(cfg env.TGDownloader, lc fx.Lifecycle, log *logger.Logger) iPotTokenRepo.IPOTokenRepository {
 	return potTokenRepo.NewPOTokenChecker(cfg, lc, log)
 }
 
-func NewBotService(botRepo i.IBotRepository, cacheRepo i.IBotCacheRepository, systemRepo iSystemRepo.ISystemRepository, potTokenChecker iPotTokenRepo.IPOTokenChecker, cfg env.TGDownloader, logger *logger.Logger) service.IBotService {
+func NewBotService(botRepo i.IBotRepository, cacheRepo i.IBotCacheRepository, systemRepo iSystemRepo.ISystemRepository, potTokenChecker iPotTokenRepo.IPOTokenRepository, cfg env.TGDownloader, logger *logger.Logger) service.IBotService {
 	return service.NewBotService(botRepo, cacheRepo, systemRepo, potTokenChecker, cfg, logger)
 }
 

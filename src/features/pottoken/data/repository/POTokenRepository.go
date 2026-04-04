@@ -14,9 +14,9 @@ import (
 	"go.uber.org/fx"
 )
 
-// POTokenChecker performs periodic TCP reachability checks against the
+// POTokenRepository performs periodic TCP reachability checks against the
 // bgutil-ytdlp-pot-provider server and tracks state transitions for logging.
-type POTokenChecker struct {
+type POTokenRepository struct {
 	reachable   atomic.Bool
 	providerURL string
 	interval    time.Duration
@@ -26,8 +26,8 @@ type POTokenChecker struct {
 
 // NewPOTokenChecker creates a POTokenChecker and registers FX lifecycle hooks.
 // If providerUrl is nil or empty, no hooks are registered and IsReachable() always returns false.
-func NewPOTokenChecker(cfg env.TGDownloader, lc fx.Lifecycle, log *logger.Logger) *POTokenChecker {
-	c := &POTokenChecker{
+func NewPOTokenChecker(cfg env.TGDownloader, lc fx.Lifecycle, log *logger.Logger) *POTokenRepository {
+	c := &POTokenRepository{
 		logger: log,
 	}
 
@@ -64,8 +64,8 @@ func NewPOTokenChecker(cfg env.TGDownloader, lc fx.Lifecycle, log *logger.Logger
 
 // NewPOTokenCheckerForTest creates a POTokenChecker without FX lifecycle hooks.
 // This constructor is exported for use in unit tests only.
-func NewPOTokenCheckerForTest(providerURL string, intervalSeconds int, log *logger.Logger) *POTokenChecker {
-	return &POTokenChecker{
+func NewPOTokenCheckerForTest(providerURL string, intervalSeconds int, log *logger.Logger) *POTokenRepository {
+	return &POTokenRepository{
 		providerURL: providerURL,
 		interval:    time.Duration(intervalSeconds) * time.Second,
 		logger:      log,
@@ -73,30 +73,30 @@ func NewPOTokenCheckerForTest(providerURL string, intervalSeconds int, log *logg
 }
 
 // IsReachable returns true if the last health check found the server reachable.
-func (c *POTokenChecker) IsReachable() bool {
+func (c *POTokenRepository) IsReachable() bool {
 	return c.reachable.Load()
 }
 
 // ProviderURL returns the configured PO Token server URL.
 // Returns empty string if PO Token checking is disabled.
-func (c *POTokenChecker) ProviderURL() string {
+func (c *POTokenRepository) ProviderURL() string {
 	return c.providerURL
 }
 
 // SetReachable sets the internal reachable state directly.
 // Exported for use in unit tests to pre-condition state.
-func (c *POTokenChecker) SetReachable(v bool) {
+func (c *POTokenRepository) SetReachable(v bool) {
 	c.reachable.Store(v)
 }
 
 // CheckNow performs a single health check and logs according to isStartup semantics.
 // Exported for use in unit tests.
-func (c *POTokenChecker) CheckNow(isStartup bool) {
+func (c *POTokenRepository) CheckNow(isStartup bool) {
 	c.checkAndLog(isStartup)
 }
 
 // checkAndLog performs a TCP check and logs on startup (always) or state transitions (periodic).
-func (c *POTokenChecker) checkAndLog(isStartup bool) {
+func (c *POTokenRepository) checkAndLog(isStartup bool) {
 	now := TcpReachable(c.providerURL, 2*time.Second)
 	prev := c.reachable.Swap(now)
 
@@ -118,7 +118,7 @@ func (c *POTokenChecker) checkAndLog(isStartup bool) {
 }
 
 // runPeriodicCheck loops on the ticker until the context is cancelled.
-func (c *POTokenChecker) runPeriodicCheck(ctx context.Context) {
+func (c *POTokenRepository) runPeriodicCheck(ctx context.Context) {
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
 

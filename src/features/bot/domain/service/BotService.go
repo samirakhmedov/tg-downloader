@@ -21,7 +21,7 @@ type BotService struct {
 	botRepo         repository.IBotRepository
 	cacheRepo       repository.IBotCacheRepository
 	systemRepo      systemRepo.ISystemRepository
-	potTokenChecker iPotTokenRepo.IPOTokenChecker
+	potTokenChecker iPotTokenRepo.IPOTokenRepository
 	environment     env.TGDownloader
 	converter       *converter.EnvCommandToCommandConverter
 	logger          *logger.Logger
@@ -29,7 +29,7 @@ type BotService struct {
 
 // NewBotService creates a new BotService with all required dependencies.
 // The logger parameter allows dynamic control of logging behavior.
-func NewBotService(botRepo repository.IBotRepository, cacheRepo repository.IBotCacheRepository, systemRepo systemRepo.ISystemRepository, potTokenChecker iPotTokenRepo.IPOTokenChecker, environment env.TGDownloader, logger *logger.Logger) *BotService {
+func NewBotService(botRepo repository.IBotRepository, cacheRepo repository.IBotCacheRepository, systemRepo systemRepo.ISystemRepository, potTokenChecker iPotTokenRepo.IPOTokenRepository, environment env.TGDownloader, logger *logger.Logger) *BotService {
 	return &BotService{
 		botRepo:         botRepo,
 		cacheRepo:       cacheRepo,
