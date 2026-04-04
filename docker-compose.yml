@@ -6,6 +6,14 @@
 #   docker compose up -d --build  # Rebuild and start
 #   docker compose logs -f        # View logs
 #   docker compose down           # Stop and remove containers
+#
+# Setup:
+#   1. Copy config/Example.pkl to config/Config.pkl
+#   2. Edit Config.pkl: set your bot token, admin username, bot name
+#   3. Set providerUrl to "http://pot-server:4416" (Docker networking)
+#   4. Set ytdlpExecutablePath to "/usr/local/bin/yt-dlp"
+#   5. (Optional) Place cookies.txt in project root for YouTube auth
+#   6. Run: docker compose up -d --build
 # =============================================================================
 
 services:
@@ -16,25 +24,30 @@ services:
     image: tg-downloader:latest
     container_name: tg-downloader
     restart: unless-stopped
-    
-    # Mount custom configuration (create your own Config.pkl from Example.pkl)
+    depends_on:
+      - pot-server
+
     volumes:
-      # Configuration file - mount your own config with your bot token
+      # Configuration file — create your own from Example.pkl
       - ./config/Config.pkl:/app/config/Config.pkl:ro
-      
-      # Configuration templates (read-only, for Pkl amends)
+
+      # Configuration templates (read-only, required for Pkl amends)
       - ./config/templates:/app/config/templates:ro
-      
+
       # Persistent database storage
       - tg-downloader-data:/app/data
-      
-      # Video output directory (optional - for accessing downloaded videos)
+
+      # Video output directory (optional — for accessing downloaded videos)
       - ./output:/app/output
-    
-    # Environment variables (optional overrides)
+
+      # YouTube cookies (optional — uncomment if you have a cookies.txt)
+      # - ./cookies.txt:/app/config/cookies.txt:ro
+
     environment:
       - TZ=UTC
-    
+      # Tell bgutil plugin where to find the PO Token server
+      - POT_PROVIDER_URL=http://pot-server:4416
+
     # Resource limits (adjust based on your needs)
     deploy:
       resources:
@@ -44,7 +57,7 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
-    
+
     # Health check
     healthcheck:
       test: ["CMD", "pgrep", "-x", "tg-downloader"]
@@ -52,12 +65,39 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    
+
     # Logging configuration
     logging:
       driver: json-file
       options:
         max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # PO Token Server — provides YouTube Proof-of-Origin tokens
+  # Bot works without this, but some YouTube videos may fail to download
+  # ---------------------------------------------------------------------------
+  pot-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.pot-server
+    image: pot-server:latest
+    container_name: pot-server
+    restart: unless-stopped
+    expose:
+      - "4416"
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4416 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
         max-file: "3"
 
 # Named volumes for persistent data

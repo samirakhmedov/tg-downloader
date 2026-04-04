@@ -11,11 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Pkl CLI
-ARG PKL_VERSION=0.28.0
-RUN curl -L -o /tmp/pkl.jar "https://github.com/apple/pkl/releases/download/${PKL_VERSION}/pkl-linux-amd64" \
-    && chmod +x /tmp/pkl.jar \
-    && mv /tmp/pkl.jar /usr/local/bin/pkl
+# Install Pkl CLI (must match version used in development)
+ARG PKL_VERSION=0.31.1
+RUN ARCH=$(uname -m) && \
+    PKL_ARCH=$(if [ "$ARCH" = "aarch64" ]; then echo "aarch64"; else echo "amd64"; fi) && \
+    curl -L -o /usr/local/bin/pkl \
+    "https://github.com/apple/pkl/releases/download/${PKL_VERSION}/pkl-linux-${PKL_ARCH}" \
+    && chmod +x /usr/local/bin/pkl
 
 # Set working directory
 WORKDIR /build
@@ -23,18 +25,15 @@ WORKDIR /build
 # Copy go module files first for better caching
 COPY go.mod go.sum* ./
 
-# Download dependencies
+# Download dependencies (includes pkl-gen-go via tool directive in go.mod)
 RUN go mod download
-
-# Install pkl-gen-go tool
-RUN go install github.com/apple/pkl-go/cmd/pkl-gen-go@latest
 
 # Copy config files needed for code generation
 COPY config/ ./config/
 
-# Generate Go code from Pkl configuration
-RUN pkl eval config/Config.pkl && \
-    pkl-gen-go config/Config.pkl
+# Generate Go code from Pkl configuration template
+# (uses go tool directive — no separate install needed)
+RUN go tool pkl-gen-go config/templates/TgDownloaderConfig.pkl
 
 # Copy the rest of the source code
 COPY . .
@@ -59,13 +58,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
+    unzip \
     python3 \
     python3-pip \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp via pip
-RUN pip3 install --break-system-packages --no-cache-dir yt-dlp
+# Install Deno (required by yt-dlp for YouTube JS challenge solving)
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
+
+# Install yt-dlp + bgutil PO Token plugin
+RUN pip3 install --break-system-packages --no-cache-dir \
+    yt-dlp \
+    bgutil-ytdlp-pot-provider
+
+# Create yt-dlp system config (enables remote JS components for YouTube)
+RUN echo '--remote-components ejs:github' > /etc/yt-dlp.conf
 
 # Create app user for security
 RUN useradd -m -s /bin/bash appuser
@@ -77,16 +86,13 @@ WORKDIR /app
 RUN mkdir -p /app/config/templates /app/output/videos /app/temp/videos /app/data \
     && chown -R appuser:appuser /app
 
-# Copy the binary from builder stage
+# Copy the binary and pkl CLI from builder stage
+# (pkl is needed at runtime for Config.pkl evaluation via pkl-go)
 COPY --from=builder /build/tg-downloader /app/tg-downloader
+COPY --from=builder /usr/local/bin/pkl /usr/local/bin/pkl
 
-# Copy config templates and default config
+# Copy config templates (required for Pkl amends at runtime)
 COPY --chown=appuser:appuser config/templates/ /app/config/templates/
-COPY --chown=appuser:appuser config/Example.pkl /app/config/Config.pkl
-
-# Update the config to use the correct yt-dlp path for Linux
-# Note: Users should mount their own config with proper bot token
-RUN sed -i 's|ytdlpExecutablePath = ".*"|ytdlpExecutablePath = "/usr/local/bin/yt-dlp"|' /app/config/Config.pkl
 
 # Switch to non-root user
 USER appuser

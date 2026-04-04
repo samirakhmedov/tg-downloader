@@ -47,10 +47,16 @@ temp/
 !config/templates/*.md
 LICENSE
 
+# Other Dockerfiles (not needed in build context for main Dockerfile)
+Dockerfile.*
+
 # Local environment files
 .env
 .env.*
 *.local
+
+# Cookies (sensitive — mounted at runtime, not baked into image)
+cookies.txt
 
 # Cursor/Editor specific
 .cursor/

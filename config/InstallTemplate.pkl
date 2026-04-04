@@ -45,7 +45,7 @@ commandConfiguration {
         }
         ["start"] {
             command = "/start"
-            description = "Sthart the bot"
+            description = "Start the bot"
             accessLevel = "user"
         }
         ["getServerLoad"] {
@@ -67,18 +67,8 @@ commandConfiguration {
 
     supportedLinks {
         new {
-            name = "Instagram Posts"
-            pattern = "^https://(?:www\\.)?instagram\\.com/p/[A-Za-z0-9_-]+/?(?:\\?.*)?$"
-            example = "EXAMPLE"
-            strategies {
-                new { name = "best"; format = "b" }
-                new { name = "worst"; format = "worst" }
-            }
-            extractorArgs {}
-        }
-        new {
             name = "Instagram Reels"
-            pattern = "^https://(?:www\\.)?instagram\\.com/reel/[A-Za-z0-9_-]+/?(?:\\?.*)?$"
+            pattern = "^https://(?:www\\.)?instagram\\.com/(?:reel|p)/[A-Za-z0-9_-]+/?(?:\\?.*)?$"
             example = "EXAMPLE"
             strategies {
                 new { name = "best"; format = "b" }
@@ -117,10 +107,10 @@ commandConfiguration {
                 new { name = "best 720p"; format = "best[height<=720]" }
                 new { name = "worst"; format = "worst" }
             }
-            extractorArgs {}
+            extractorArgs { "youtube:player_client=web" }
         }
         new {
-            name = "Twitter/X Shorts"
+            name = "Twitter/X"
             pattern = "^https://(?:www\\.)?(vxtwitter|x|twitter)\\.com/[A-Za-z0-9_]+/status/[0-9]+(?:\\?.*)?$"
             example = "EXAMPLE"
             strategies {
