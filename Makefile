@@ -20,7 +20,7 @@ config-gen:
 
 	pkl eval config/Config.pkl
 
-	pkl-gen-go config/Config.pkl
+	go tool pkl-gen-go config/Config.pkl
 
 install:
 	go mod download

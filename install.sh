@@ -64,12 +64,11 @@ echo 'export PATH=/usr/local/go/bin:$PATH' > /etc/profile.d/golang.sh
 # ---------------------------------------------------------------------------
 # Step 3 — Install Pkl CLI (pinned to 0.28.0 matching Dockerfile ARG)
 # ---------------------------------------------------------------------------
-PKL_VERSION="0.29.0"
-echo "[3/16] Installing Pkl CLI ${PKL_VERSION} and pkl-gen-go..."
+PKL_VERSION="0.31.1"
+echo "[3/16] Installing Pkl CLI ${PKL_VERSION}..."
 curl -L -o /usr/local/bin/pkl \
     "https://github.com/apple/pkl/releases/download/${PKL_VERSION}/pkl-linux-amd64"
 chmod +x /usr/local/bin/pkl
-GOBIN=/usr/local/bin go install github.com/apple/pkl-go/cmd/pkl-gen-go@v0.12.1
 
 # ---------------------------------------------------------------------------
 # Step 4 — Install Node.js 20 LTS via NodeSource
