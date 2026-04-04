@@ -71,6 +71,12 @@ class SupportedLinkPattern {
 
   /// Example URL for user reference
   example: String(!isEmpty)
+
+  /// Ordered format strategy chain for this platform (first success wins)
+  strategies: Listing<FormatStrategy>(!isEmpty)
+
+  /// Platform-specific extractor arguments (e.g., "youtube:player_client=android_sdkless")
+  extractorArgs: Listing<String>
 }
 
 /// Command configuration for bot interactions
@@ -104,10 +110,6 @@ class CommonDownloaderConfiguration {
   /// 0 means no maximum sleep interval
   maxSleepInterval: Float(this >= 0)
 
-  /// TikTok-specific API hostname for workarounds
-  /// Leave empty to use default TikTok API
-  tiktokApiHostname: String?
-
   /// Additional extractor arguments as key:value pairs
   /// Example: tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com
   extractorArgs: Listing<String>
@@ -117,16 +119,27 @@ class CommonDownloaderConfiguration {
   customHeaders: Listing<String>
 }
 
+/// A single format strategy entry for the fallback chain
+class FormatStrategy {
+  /// Human-readable name for log messages (e.g., "best available", "720p mp4")
+  name: String(!isEmpty)
+  /// yt-dlp format selector string
+  format: String(!isEmpty)
+}
+
 /// Video-specific downloader configuration
 class VideoDownloaderConfiguration {
   /// Output video format (e.g., "mp4", "webm")
   outputFormat: String(!isEmpty)
 
-  /// Video quality settings for yt-dlp (e.g., "best[height<=720]", "worst")
-  videoQuality: String(!isEmpty)
-
   /// Maximum file size in MB for uploads
   maxFileSizeMB: Int(this > 0)
+
+  /// Timeout in seconds for yt-dlp download subprocess (default 300 = 5 minutes)
+  downloadTimeoutSeconds: Int(this > 0)
+
+  /// Timeout in seconds for Telegram upload operation (default 300 = 5 minutes)
+  uploadTimeoutSeconds: Int(this > 0)
 }
 
 /// Worker configuration for video processing
@@ -139,6 +152,20 @@ class WorkerConfiguration {
 
   /// Maximum number of retry attempts for failed downloads
   maxRetries: Int(this >= 0)
+}
+
+/// PO Token provider configuration for YouTube Proof-of-Origin authentication.
+/// The bgutil-ytdlp-pot-provider yt-dlp plugin auto-discovers the server.
+/// This section controls operational health checking only — no download logic changes.
+class POTokenConfiguration {
+  /// URL of the bgutil PO Token server.
+  /// Leave null/empty to disable PO Token health checking entirely.
+  /// Default: http://127.0.0.1:4416
+  providerUrl: String?
+
+  /// Interval in seconds between periodic health re-checks.
+  /// Must be positive. Default: 900 (15 minutes).
+  healthCheckIntervalSeconds: Int(this > 0)
 }
 
 /// Telegram configuration settings for bot API integration
@@ -158,6 +185,9 @@ videoDownloaderConfiguration: VideoDownloaderConfiguration
 
 /// Worker configuration for video processing
 workerConfiguration: WorkerConfiguration
+
+/// PO Token configuration for YouTube Proof-of-Origin token server health checking
+poTokenConfiguration: POTokenConfiguration
 
 /// Enable debug mode for verbose logging and debugging information
 debug: Boolean

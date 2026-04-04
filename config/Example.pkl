@@ -66,24 +66,70 @@ commandConfiguration {
 
     supportedLinks {
         new {
+            name = "Instagram Posts"
+            pattern = "^https://(?:www\\.)?instagram\\.com/p/[A-Za-z0-9_-]+/?(?:\\?.*)?$"
+            example = "EXAMPLE"
+            strategies {
+                new { name = "best"; format = "b" }
+                new { name = "worst"; format = "worst" }
+            }
+            extractorArgs {}
+        }
+        new {
             name = "Instagram Reels"
             pattern = "^https://(?:www\\.)?instagram\\.com/reel/[A-Za-z0-9_-]+/?(?:\\?.*)?$"
             example = "EXAMPLE"
+            strategies {
+                new { name = "best"; format = "b" }
+                new { name = "best 720p"; format = "best[height<=720]" }
+                new { name = "worst"; format = "worst" }
+            }
+            extractorArgs {}
         }
         new {
             name = "TikTok"
             pattern = "^https://(?:www\\.)?vt\\.tiktok\\.com/[A-Za-z0-9]+/?(?:\\?.*)?$"
             example = "EXAMPLE"
+            strategies {
+                new { name = "best"; format = "b" }
+                new { name = "best 720p"; format = "best[height<=720]" }
+                new { name = "worst"; format = "worst" }
+            }
+            extractorArgs {}
+        }
+        new {
+            name = "TikTok Full"
+            pattern = "^https://(?:www\\.)?tiktok\\.com/@[A-Za-z0-9_.]+/(?:video|photo)/[0-9]+/?(?:\\?.*)?$"
+            example = "EXAMPLE"
+            strategies {
+                new { name = "best"; format = "b" }
+                new { name = "worst"; format = "worst" }
+            }
+            extractorArgs {}
         }
         new {
             name = "YouTube Shorts"
             pattern = "^https://(?:www\\.)?youtube\\.com/shorts/[A-Za-z0-9_-]+/?(?:\\?.*)?$"
             example = "EXAMPLE"
+            strategies {
+                new { name = "best"; format = "b" }
+                new { name = "best 720p"; format = "best[height<=720]" }
+                new { name = "worst"; format = "worst" }
+            }
+            extractorArgs {
+                "youtube:player_client=android_sdkless"
+            }
         }
         new {
             name = "Twitter/X Shorts"
             pattern = "^https://(?:www\\.)?vxtwitter\\.com/[A-Za-z0-9_]+/status/[0-9]+(?:\\?.*)?$"
             example = "EXAMPLE"
+            strategies {
+                new { name = "best"; format = "b" }
+                new { name = "best 720p"; format = "best[height<=720]" }
+                new { name = "worst"; format = "worst" }
+            }
+            extractorArgs {}
         }
         // Any new formats...
     }
@@ -102,14 +148,9 @@ commonDownloaderConfiguration {
     sleepInterval = 1.0
     maxSleepInterval = 3.0
 
-    // TikTok-specific API hostname workaround for Linux issues
-    tiktokApiHostname = "api.tiktokv.com"
-
     // Additional extractor arguments
     extractorArgs {
-        "youtube:player_client=android,web"
-        
-        // ...
+        // Global extractor args
     }
 
     // Custom HTTP headers
@@ -123,14 +164,20 @@ commonDownloaderConfiguration {
 
 videoDownloaderConfiguration {
     outputFormat = "mp4"
-    videoQuality = "best[height<=720]/best[height<=1080]/best"
     maxFileSizeMB = 10
+    downloadTimeoutSeconds = 300
+    uploadTimeoutSeconds = 300
 }
 
 workerConfiguration {
     workerCount = 10
     taskPollingInterval = 1
     maxRetries = 2
+}
+
+poTokenConfiguration {
+    providerUrl = "http://127.0.0.1:4416"
+    healthCheckIntervalSeconds = 900
 }
 
 debug = false

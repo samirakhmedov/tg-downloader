@@ -13,11 +13,9 @@ import (
 	"tg-downloader/src/core/logger"
 	botEntity "tg-downloader/src/features/bot/domain/entity"
 	botRepo "tg-downloader/src/features/bot/domain/repository"
-	mediaEntity "tg-downloader/src/features/media/domain/entity"
+	"tg-downloader/src/features/media/data/service"
+	"tg-downloader/src/features/media/domain/entity"
 	iMediaRepo "tg-downloader/src/features/media/domain/repository"
-	"tg-downloader/src/features/video/domain/entity"
-	videoRepo "tg-downloader/src/features/video/domain/repository"
-	"tg-downloader/src/features/video/domain/service"
 )
 
 // --- Logger helper ---
@@ -72,12 +70,12 @@ func (m *mockTaskRepository) AddGroupToTask(taskID int, groupID int64, messageID
 // Ensure mockTaskRepository implements ITaskRepository.
 var _ botRepo.ITaskRepository = (*mockTaskRepository)(nil)
 
-// mockDownloadRepository is a configurable IVideoDownloadRepository stub.
+// mockDownloadRepository is a configurable IMediaDownloadRepository stub.
 type mockDownloadRepository struct {
 	validateResult        bool
 	validatePlatform      entity.PlatformInfo
 	validateErr           error
-	downloadResult        *entity.VideoProcessResult
+	downloadResult        *entity.DownloadResult
 	downloadErr           error
 	createFileInOutputDir bool
 	filesToCreate         []string // list of filenames to create (e.g., "image.jpg", "clip.mp4")
@@ -87,7 +85,7 @@ func (m *mockDownloadRepository) ValidateURL(url string) (bool, entity.PlatformI
 	return m.validateResult, m.validatePlatform, m.validateErr
 }
 
-func (m *mockDownloadRepository) DownloadVideo(url string, outputDir string, platform entity.PlatformInfo) (*entity.VideoProcessResult, error) {
+func (m *mockDownloadRepository) DownloadMedia(url string, outputDir string, platform entity.PlatformInfo) (*entity.DownloadResult, error) {
 	if m.downloadErr != nil {
 		return m.downloadResult, m.downloadErr
 	}
@@ -113,30 +111,23 @@ func (m *mockDownloadRepository) DownloadVideo(url string, outputDir string, pla
 	return m.downloadResult, nil
 }
 
-// Ensure mockDownloadRepository implements IVideoDownloadRepository.
-var _ videoRepo.IVideoDownloadRepository = (*mockDownloadRepository)(nil)
-
-// mockUploadRepository is a configurable IUploadRepository stub.
-type mockUploadRepository struct {
-	err              error
-	uploadVideoCalls int
-}
-
-func (m *mockUploadRepository) UploadVideo(ctx context.Context, filePath string, groupID int64) error {
-	m.uploadVideoCalls++
-	return m.err
-}
-
-// Ensure mockUploadRepository implements IUploadRepository.
-var _ videoRepo.IUploadRepository = (*mockUploadRepository)(nil)
+// Ensure mockDownloadRepository implements IMediaDownloadRepository.
+var _ iMediaRepo.IMediaDownloadRepository = (*mockDownloadRepository)(nil)
 
 // mockMediaUploadRepository is a configurable IMediaUploadRepository stub.
 type mockMediaUploadRepository struct {
+	uploadVideoCalls int
 	uploadPhotoCalls int
 	uploadAlbumCalls int
-	lastAlbumItems   []mediaEntity.MediaItem
+	lastAlbumItems   []entity.MediaItem
+	videoErr         error
 	photoErr         error
 	albumErr         error
+}
+
+func (m *mockMediaUploadRepository) UploadVideo(ctx context.Context, filePath string, groupID int64) error {
+	m.uploadVideoCalls++
+	return m.videoErr
 }
 
 func (m *mockMediaUploadRepository) UploadPhoto(ctx context.Context, filePath string, groupID int64) error {
@@ -144,7 +135,7 @@ func (m *mockMediaUploadRepository) UploadPhoto(ctx context.Context, filePath st
 	return m.photoErr
 }
 
-func (m *mockMediaUploadRepository) UploadAlbum(ctx context.Context, items []mediaEntity.MediaItem, groupID int64) error {
+func (m *mockMediaUploadRepository) UploadAlbum(ctx context.Context, items []entity.MediaItem, groupID int64) error {
 	m.uploadAlbumCalls++
 	m.lastAlbumItems = items
 	return m.albumErr
@@ -233,15 +224,6 @@ func TestClassifyDownloadErrorTimeout(t *testing.T) {
 }
 
 // --- TestScheduleStopsWhenQueueFull ---
-// Verifies the labeled-break fix (BUGF-01):
-// When taskQueue capacity is 1 and 3 tasks are available, ScheduleAvailableTasks
-// marks a task in_progress before attempting to queue it. With capacity=1:
-//   - Task 1 is marked in_progress, then queued successfully (queue is now full).
-//   - Task 2 is marked in_progress, then the queue send blocks → labeled-break exits.
-//   - Task 3 is never fetched or marked (loop stopped after the first blocked send).
-//
-// Without the labeled-break fix the loop would continue to task 3, marking it in_progress
-// even though the queue is full — causing it to be lost until the next scheduler cycle.
 func TestScheduleStopsWhenQueueFull(t *testing.T) {
 	tasks := []*botEntity.Task{
 		{ID: 1, Link: "https://example.com/1", GroupIDs: []int64{100}, StatusMessageIDs: map[int64]int{100: 1}},
@@ -254,20 +236,14 @@ func TestScheduleStopsWhenQueueFull(t *testing.T) {
 	// WorkerCount=1 means taskQueue capacity=1
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(
+	svc := service.NewMediaService(
 		cfg,
 		taskRepo,
 		&mockDownloadRepository{},
-		&mockUploadRepository{},
 		&mockMediaUploadRepository{},
 		newTestLogger(),
 	)
 
-	// Call ScheduleAvailableTasks directly (no goroutines running).
-	// Expected flow:
-	//   iteration 1: GetNextTask→task1, MarkInProgress(1), queue←task1 (succeeds, queue full)
-	//   iteration 2: GetNextTask→task2, MarkInProgress(2), queue←task2 (fails, queue full) → break
-	//   iteration 3: never reached — the labeled-break exits the loop
 	svc.ScheduleAvailableTasks()
 
 	// Tasks 1 and 2 should be marked in_progress; task 3 must NOT be marked.
@@ -283,16 +259,14 @@ func TestScheduleStopsWhenQueueFull(t *testing.T) {
 
 // --- Temp dir cleanup tests ---
 
-// TestProcessTaskTempDirCleanup verifies that a successful processTask
-// removes its per-task temp directory after completion.
 func TestProcessTaskTempDirCleanup(t *testing.T) {
 	downloadMock := &mockDownloadRepository{
 		validateResult:        true,
 		validatePlatform:      entity.PlatformInfo{Name: "Test"},
-		downloadResult:        &entity.VideoProcessResult{Success: true, FileName: "test.mp4", FileSize: 1024},
+		downloadResult:        &entity.DownloadResult{Success: true, FileName: "test.mp4", FileSize: 1024},
 		createFileInOutputDir: true,
 	}
-	uploadMock := &mockUploadRepository{err: nil}
+	mediaUploadMock := &mockMediaUploadRepository{}
 
 	tasks := []*botEntity.Task{
 		{ID: 1, Link: "https://example.com/video", GroupIDs: []int64{100}, StatusMessageIDs: map[int64]int{100: 1}},
@@ -300,7 +274,7 @@ func TestProcessTaskTempDirCleanup(t *testing.T) {
 	taskRepo := &mockTaskRepository{tasks: tasks}
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(cfg, taskRepo, downloadMock, uploadMock, &mockMediaUploadRepository{}, newTestLogger())
+	svc := service.NewMediaService(cfg, taskRepo, downloadMock, mediaUploadMock, newTestLogger())
 	svc.StartWorkers()
 	svc.ScheduleAvailableTasks()
 
@@ -315,16 +289,14 @@ func TestProcessTaskTempDirCleanup(t *testing.T) {
 	}
 }
 
-// TestProcessTaskTempDirCleanedOnDownloadFailure verifies that even when download
-// fails, the per-task temp directory is cleaned up.
 func TestProcessTaskTempDirCleanedOnDownloadFailure(t *testing.T) {
 	downloadMock := &mockDownloadRepository{
 		validateResult:   true,
 		validatePlatform: entity.PlatformInfo{Name: "Test"},
-		downloadResult:   &entity.VideoProcessResult{Success: false, Error: errors.New("download failed")},
+		downloadResult:   &entity.DownloadResult{Success: false, Error: errors.New("download failed")},
 		downloadErr:      errors.New("download failed"),
 	}
-	uploadMock := &mockUploadRepository{}
+	mediaUploadMock := &mockMediaUploadRepository{}
 
 	tasks := []*botEntity.Task{
 		{ID: 1, Link: "https://example.com/video", GroupIDs: []int64{100}, StatusMessageIDs: map[int64]int{100: 1}},
@@ -332,7 +304,7 @@ func TestProcessTaskTempDirCleanedOnDownloadFailure(t *testing.T) {
 	taskRepo := &mockTaskRepository{tasks: tasks}
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(cfg, taskRepo, downloadMock, uploadMock, &mockMediaUploadRepository{}, newTestLogger())
+	svc := service.NewMediaService(cfg, taskRepo, downloadMock, mediaUploadMock, newTestLogger())
 	svc.StartWorkers()
 	svc.ScheduleAvailableTasks()
 
@@ -345,16 +317,14 @@ func TestProcessTaskTempDirCleanedOnDownloadFailure(t *testing.T) {
 	}
 }
 
-// TestUploadFailureLeavesNoTempFiles verifies that when upload fails, the per-task
-// temp directory is still cleaned up (not left behind as orphaned files).
 func TestUploadFailureLeavesNoTempFiles(t *testing.T) {
 	downloadMock := &mockDownloadRepository{
 		validateResult:        true,
 		validatePlatform:      entity.PlatformInfo{Name: "Test"},
-		downloadResult:        &entity.VideoProcessResult{Success: true, FileName: "test.mp4", FileSize: 1024},
+		downloadResult:        &entity.DownloadResult{Success: true, FileName: "test.mp4", FileSize: 1024},
 		createFileInOutputDir: true,
 	}
-	uploadMock := &mockUploadRepository{err: errors.New("upload failed: connection timeout")}
+	mediaUploadMock := &mockMediaUploadRepository{videoErr: errors.New("upload failed: connection timeout")}
 
 	tasks := []*botEntity.Task{
 		{ID: 1, Link: "https://example.com/video", GroupIDs: []int64{100}, StatusMessageIDs: map[int64]int{100: 1}},
@@ -362,7 +332,7 @@ func TestUploadFailureLeavesNoTempFiles(t *testing.T) {
 	taskRepo := &mockTaskRepository{tasks: tasks}
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(cfg, taskRepo, downloadMock, uploadMock, &mockMediaUploadRepository{}, newTestLogger())
+	svc := service.NewMediaService(cfg, taskRepo, downloadMock, mediaUploadMock, newTestLogger())
 	svc.StartWorkers()
 	svc.ScheduleAvailableTasks()
 
@@ -377,16 +347,13 @@ func TestUploadFailureLeavesNoTempFiles(t *testing.T) {
 
 // --- Routing tests ---
 
-// TestProcessTaskSingleImageRoute verifies that a single image file routes to UploadPhoto,
-// not UploadVideo or UploadAlbum.
 func TestProcessTaskSingleImageRoute(t *testing.T) {
 	downloadMock := &mockDownloadRepository{
 		validateResult:   true,
 		validatePlatform: entity.PlatformInfo{Name: "Instagram Posts"},
-		downloadResult:   &entity.VideoProcessResult{Success: true, FileName: "photo.jpg", FileSize: 1024},
+		downloadResult:   &entity.DownloadResult{Success: true, FileName: "photo.jpg", FileSize: 1024},
 		filesToCreate:    []string{"photo.jpg"},
 	}
-	uploadMock := &mockUploadRepository{}
 	mediaUploadMock := &mockMediaUploadRepository{}
 
 	tasks := []*botEntity.Task{
@@ -395,7 +362,7 @@ func TestProcessTaskSingleImageRoute(t *testing.T) {
 	taskRepo := &mockTaskRepository{tasks: tasks}
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(cfg, taskRepo, downloadMock, uploadMock, mediaUploadMock, newTestLogger())
+	svc := service.NewMediaService(cfg, taskRepo, downloadMock, mediaUploadMock, newTestLogger())
 	svc.StartWorkers()
 	svc.ScheduleAvailableTasks()
 
@@ -408,20 +375,18 @@ func TestProcessTaskSingleImageRoute(t *testing.T) {
 	if mediaUploadMock.uploadAlbumCalls != 0 {
 		t.Errorf("expected 0 UploadAlbum calls, got %d", mediaUploadMock.uploadAlbumCalls)
 	}
-	if uploadMock.uploadVideoCalls != 0 {
-		t.Errorf("expected 0 UploadVideo calls, got %d", uploadMock.uploadVideoCalls)
+	if mediaUploadMock.uploadVideoCalls != 0 {
+		t.Errorf("expected 0 UploadVideo calls, got %d", mediaUploadMock.uploadVideoCalls)
 	}
 }
 
-// TestProcessTaskMultiImageRoute verifies that multiple image files route to UploadAlbum.
 func TestProcessTaskMultiImageRoute(t *testing.T) {
 	downloadMock := &mockDownloadRepository{
 		validateResult:   true,
 		validatePlatform: entity.PlatformInfo{Name: "Instagram Posts"},
-		downloadResult:   &entity.VideoProcessResult{Success: true, FileName: "slide1.jpg", FileSize: 1024},
+		downloadResult:   &entity.DownloadResult{Success: true, FileName: "slide1.jpg", FileSize: 1024},
 		filesToCreate:    []string{"slide1.jpg", "slide2.png", "slide3.webp"},
 	}
-	uploadMock := &mockUploadRepository{}
 	mediaUploadMock := &mockMediaUploadRepository{}
 
 	tasks := []*botEntity.Task{
@@ -430,7 +395,7 @@ func TestProcessTaskMultiImageRoute(t *testing.T) {
 	taskRepo := &mockTaskRepository{tasks: tasks}
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(cfg, taskRepo, downloadMock, uploadMock, mediaUploadMock, newTestLogger())
+	svc := service.NewMediaService(cfg, taskRepo, downloadMock, mediaUploadMock, newTestLogger())
 	svc.StartWorkers()
 	svc.ScheduleAvailableTasks()
 
@@ -446,20 +411,18 @@ func TestProcessTaskMultiImageRoute(t *testing.T) {
 	if mediaUploadMock.uploadPhotoCalls != 0 {
 		t.Errorf("expected 0 UploadPhoto calls, got %d", mediaUploadMock.uploadPhotoCalls)
 	}
-	if uploadMock.uploadVideoCalls != 0 {
-		t.Errorf("expected 0 UploadVideo calls, got %d", uploadMock.uploadVideoCalls)
+	if mediaUploadMock.uploadVideoCalls != 0 {
+		t.Errorf("expected 0 UploadVideo calls, got %d", mediaUploadMock.uploadVideoCalls)
 	}
 }
 
-// TestProcessTaskMixedMediaRoute verifies that mixed photo+video files route to UploadAlbum.
 func TestProcessTaskMixedMediaRoute(t *testing.T) {
 	downloadMock := &mockDownloadRepository{
 		validateResult:   true,
 		validatePlatform: entity.PlatformInfo{Name: "Instagram Posts"},
-		downloadResult:   &entity.VideoProcessResult{Success: true, FileName: "photo1.jpg", FileSize: 1024},
+		downloadResult:   &entity.DownloadResult{Success: true, FileName: "photo1.jpg", FileSize: 1024},
 		filesToCreate:    []string{"photo1.jpg", "clip.mp4", "photo2.webp"},
 	}
-	uploadMock := &mockUploadRepository{}
 	mediaUploadMock := &mockMediaUploadRepository{}
 
 	tasks := []*botEntity.Task{
@@ -468,7 +431,7 @@ func TestProcessTaskMixedMediaRoute(t *testing.T) {
 	taskRepo := &mockTaskRepository{tasks: tasks}
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(cfg, taskRepo, downloadMock, uploadMock, mediaUploadMock, newTestLogger())
+	svc := service.NewMediaService(cfg, taskRepo, downloadMock, mediaUploadMock, newTestLogger())
 	svc.StartWorkers()
 	svc.ScheduleAvailableTasks()
 
@@ -484,21 +447,18 @@ func TestProcessTaskMixedMediaRoute(t *testing.T) {
 	if mediaUploadMock.uploadPhotoCalls != 0 {
 		t.Errorf("expected 0 UploadPhoto calls, got %d", mediaUploadMock.uploadPhotoCalls)
 	}
-	if uploadMock.uploadVideoCalls != 0 {
-		t.Errorf("expected 0 UploadVideo calls, got %d", uploadMock.uploadVideoCalls)
+	if mediaUploadMock.uploadVideoCalls != 0 {
+		t.Errorf("expected 0 UploadVideo calls, got %d", mediaUploadMock.uploadVideoCalls)
 	}
 }
 
-// TestProcessTaskVideoOnlyRoute verifies that a single video file routes to UploadVideo
-// (regression test — existing video path must not break).
 func TestProcessTaskVideoOnlyRoute(t *testing.T) {
 	downloadMock := &mockDownloadRepository{
 		validateResult:   true,
 		validatePlatform: entity.PlatformInfo{Name: "YouTube"},
-		downloadResult:   &entity.VideoProcessResult{Success: true, FileName: "video.mp4", FileSize: 1024},
+		downloadResult:   &entity.DownloadResult{Success: true, FileName: "video.mp4", FileSize: 1024},
 		filesToCreate:    []string{"video.mp4"},
 	}
-	uploadMock := &mockUploadRepository{}
 	mediaUploadMock := &mockMediaUploadRepository{}
 
 	tasks := []*botEntity.Task{
@@ -507,15 +467,15 @@ func TestProcessTaskVideoOnlyRoute(t *testing.T) {
 	taskRepo := &mockTaskRepository{tasks: tasks}
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(cfg, taskRepo, downloadMock, uploadMock, mediaUploadMock, newTestLogger())
+	svc := service.NewMediaService(cfg, taskRepo, downloadMock, mediaUploadMock, newTestLogger())
 	svc.StartWorkers()
 	svc.ScheduleAvailableTasks()
 
 	time.Sleep(500 * time.Millisecond)
 	svc.StopWorkers()
 
-	if uploadMock.uploadVideoCalls != 1 {
-		t.Errorf("expected 1 UploadVideo call, got %d", uploadMock.uploadVideoCalls)
+	if mediaUploadMock.uploadVideoCalls != 1 {
+		t.Errorf("expected 1 UploadVideo call, got %d", mediaUploadMock.uploadVideoCalls)
 	}
 	if mediaUploadMock.uploadPhotoCalls != 0 {
 		t.Errorf("expected 0 UploadPhoto calls, got %d", mediaUploadMock.uploadPhotoCalls)
@@ -525,16 +485,13 @@ func TestProcessTaskVideoOnlyRoute(t *testing.T) {
 	}
 }
 
-// TestProcessTaskNoFilesFailure verifies that when download succeeds but produces no
-// recognizable media files, a VideoProcessFailure event is emitted.
 func TestProcessTaskNoFilesFailure(t *testing.T) {
 	downloadMock := &mockDownloadRepository{
 		validateResult:   true,
 		validatePlatform: entity.PlatformInfo{Name: "Test"},
-		downloadResult:   &entity.VideoProcessResult{Success: true},
+		downloadResult:   &entity.DownloadResult{Success: true},
 		// No filesToCreate, no createFileInOutputDir — download produces nothing
 	}
-	uploadMock := &mockUploadRepository{}
 	mediaUploadMock := &mockMediaUploadRepository{}
 
 	tasks := []*botEntity.Task{
@@ -543,24 +500,24 @@ func TestProcessTaskNoFilesFailure(t *testing.T) {
 	taskRepo := &mockTaskRepository{tasks: tasks}
 	cfg := newTestEnvWithWorkerCount(1)
 
-	svc := service.NewVideoService(cfg, taskRepo, downloadMock, uploadMock, mediaUploadMock, newTestLogger())
+	svc := service.NewMediaService(cfg, taskRepo, downloadMock, mediaUploadMock, newTestLogger())
 	svc.StartWorkers()
 	svc.ScheduleAvailableTasks()
 
 	time.Sleep(500 * time.Millisecond)
 	svc.StopWorkers()
 
-	events := svc.GetVideoEvents()
+	events := svc.GetMediaEvents()
 	select {
 	case evt := <-events:
-		failure, ok := evt.(entity.VideoProcessFailure)
+		failure, ok := evt.(entity.MediaProcessFailure)
 		if !ok {
-			t.Fatalf("expected VideoProcessFailure event, got %T", evt)
+			t.Fatalf("expected MediaProcessFailure event, got %T", evt)
 		}
 		if failure.ErrorMessage == "" {
 			t.Error("expected non-empty error message")
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("expected a VideoProcessFailure event but none received")
+		t.Fatal("expected a MediaProcessFailure event but none received")
 	}
 }
