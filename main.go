@@ -41,19 +41,19 @@ func main() {
 			src.NewTaskRepository,
 		),
 		fx.Provide(
-			src.NewVideoDownloadRepository,
-		),
-		fx.Provide(
-			src.NewUploadRepository,
+			src.NewMediaDownloadRepository,
 		),
 		fx.Provide(
 			src.NewMediaUploadRepository,
 		),
 		fx.Provide(
+			src.NewPOTokenChecker,
+		),
+		fx.Provide(
 			src.NewBotService,
 		),
 		fx.Provide(
-			src.NewVideoService,
+			src.NewMediaService,
 		),
 		fx.Provide(
 			src.NewBotController,

@@ -16,7 +16,7 @@ type IBotService interface {
 	HandleDirectError(userID int64, userName string, message string) error
 	HandleGroupError(groupID int64, message string) error
 	LoadResource(groupID int64, link string) (messageID int, canProcess bool, err error)
-	HandleVideoUploadStarted(groupID int64, messageID int) error
-	HandleVideoProcessSuccess(groupID int64, messageID int) error
-	HandleVideoProcessFailure(groupID int64, messageID int, errorMessage string) error
+	HandleMediaUploadStarted(groupID int64, messageID int) error
+	HandleMediaProcessSuccess(groupID int64, messageID int) error
+	HandleMediaProcessFailure(groupID int64, messageID int, errorMessage string) error
 }

@@ -123,6 +123,53 @@ make clean             # Remove build artifacts
 
 You could customize commands at configuration, but make sure to add support in code.
 
+## 🔑 PO Token Server (YouTube)
+
+YouTube may require Proof-of-Origin (PO) tokens for downloads from certain IP addresses. The bot integrates with [bgutil-ytdlp-pot-provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider) to handle this automatically.
+
+### How It Works
+
+- The `bgutil-ytdlp-pot-provider` yt-dlp plugin auto-discovers its server at `http://127.0.0.1:4416` when installed
+- No changes to download configuration are needed — the plugin handles PO tokens transparently
+- The bot performs periodic TCP health checks and logs status changes
+- If the PO Token server is unreachable, the bot continues operating — YouTube downloads may fail for some videos, but all other platforms work normally
+
+### Setup
+
+1. **Install the yt-dlp plugin:**
+   ```bash
+   pip install bgutil-ytdlp-pot-provider
+   ```
+
+2. **Clone and build the token server:**
+   ```bash
+   git clone https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git
+   cd bgutil-ytdlp-pot-provider/server
+   npm install
+   npm run build
+   ```
+
+3. **Run the token server:**
+   ```bash
+   npm start
+   ```
+   The server listens on port 4416 by default.
+
+4. **Configure the bot** (optional — defaults work for standard setup):
+   In `config/Config.pkl`:
+   ```pkl
+   poTokenConfiguration {
+       providerUrl = "http://127.0.0.1:4416"    // null or empty to disable
+       healthCheckIntervalSeconds = 900           // 15 minutes
+   }
+   ```
+
+### Monitoring
+
+- **Startup:** The bot logs PO Token server status at startup (Info if online, Warn if unreachable)
+- **Periodic:** Status changes are logged automatically (every 15 minutes by default)
+- **On demand:** Use the `/l` command (admin only) to see current PO Token server status
+
 ## 🔧 Third-Party Dependencies
 
 ### Core Dependencies

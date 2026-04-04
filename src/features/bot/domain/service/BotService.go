@@ -12,29 +12,32 @@ import (
 	"tg-downloader/src/features/bot/data/converter"
 	"tg-downloader/src/features/bot/domain/entity"
 	"tg-downloader/src/features/bot/domain/repository"
+	iPotTokenRepo "tg-downloader/src/features/pottoken/domain/repository"
 	systemEntity "tg-downloader/src/features/system/domain/entity"
 	systemRepo "tg-downloader/src/features/system/domain/repository"
 )
 
 type BotService struct {
-	botRepo     repository.IBotRepository
-	cacheRepo   repository.IBotCacheRepository
-	systemRepo  systemRepo.ISystemRepository
-	environment env.TGDownloader
-	converter   *converter.EnvCommandToCommandConverter
-	logger      *logger.Logger
+	botRepo         repository.IBotRepository
+	cacheRepo       repository.IBotCacheRepository
+	systemRepo      systemRepo.ISystemRepository
+	potTokenChecker iPotTokenRepo.IPOTokenChecker
+	environment     env.TGDownloader
+	converter       *converter.EnvCommandToCommandConverter
+	logger          *logger.Logger
 }
 
 // NewBotService creates a new BotService with all required dependencies.
 // The logger parameter allows dynamic control of logging behavior.
-func NewBotService(botRepo repository.IBotRepository, cacheRepo repository.IBotCacheRepository, systemRepo systemRepo.ISystemRepository, environment env.TGDownloader, logger *logger.Logger) *BotService {
+func NewBotService(botRepo repository.IBotRepository, cacheRepo repository.IBotCacheRepository, systemRepo systemRepo.ISystemRepository, potTokenChecker iPotTokenRepo.IPOTokenChecker, environment env.TGDownloader, logger *logger.Logger) *BotService {
 	return &BotService{
-		botRepo:     botRepo,
-		cacheRepo:   cacheRepo,
-		systemRepo:  systemRepo,
-		environment: environment,
-		converter:   converter.NewEnvCommandToCommandConverter(),
-		logger:      logger,
+		botRepo:         botRepo,
+		cacheRepo:       cacheRepo,
+		systemRepo:      systemRepo,
+		potTokenChecker: potTokenChecker,
+		environment:     environment,
+		converter:       converter.NewEnvCommandToCommandConverter(),
+		logger:          logger,
 	}
 }
 
@@ -427,6 +430,18 @@ func (s *BotService) formatSystemInfo(info *systemEntity.SystemInfo) string {
 		builder.WriteString("\n")
 	}
 
+	// PO Token Server Status
+	builder.WriteString("🔑 PO TOKEN SERVER:\n")
+	potURL := s.potTokenChecker.ProviderURL()
+	if potURL == "" {
+		builder.WriteString("Status: disabled (no URL configured)\n")
+	} else if s.potTokenChecker.IsReachable() {
+		builder.WriteString(fmt.Sprintf("Status: online (%s)\n", potURL))
+	} else {
+		builder.WriteString(fmt.Sprintf("Status: unreachable (%s)\n", potURL))
+	}
+	builder.WriteString("\n")
+
 	builder.WriteString(fmt.Sprintf("🕐 Collected at: %s", info.Timestamp.Format("2006-01-02 15:04:05")))
 
 	return builder.String()
@@ -542,16 +557,16 @@ func (s *BotService) LoadResource(groupID int64, link string) (int, bool, error)
 	return messageID, true, nil
 }
 
-func (s *BotService) HandleVideoUploadStarted(groupID int64, messageID int) error {
+func (s *BotService) HandleMediaUploadStarted(groupID int64, messageID int) error {
 	return s.botRepo.UpdateGroupMessage(groupID, messageID, "📤 Отправка в Telegram...")
 }
 
-func (s *BotService) HandleVideoProcessSuccess(groupID int64, messageID int) error {
+func (s *BotService) HandleMediaProcessSuccess(groupID int64, messageID int) error {
 	// Delete the status message - the video itself is the success indicator
 	return s.botRepo.DeleteGroupMessage(groupID, messageID)
 }
 
-func (s *BotService) HandleVideoProcessFailure(groupID int64, messageID int, errorMessage string) error {
+func (s *BotService) HandleMediaProcessFailure(groupID int64, messageID int, errorMessage string) error {
 	// Update the status message with error details
 	message := fmt.Sprintf("❌ Ошибка: %s", errorMessage)
 	return s.botRepo.UpdateGroupMessage(groupID, messageID, message)

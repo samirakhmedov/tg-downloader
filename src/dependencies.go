@@ -12,13 +12,15 @@ import (
 	i "tg-downloader/src/features/bot/domain/repository"
 	"tg-downloader/src/features/bot/domain/service"
 	controller "tg-downloader/src/features/bot/interface"
+	mediaRepo "tg-downloader/src/features/media/data/repository"
+	mediaService "tg-downloader/src/features/media/data/service"
+	iMediaRepo "tg-downloader/src/features/media/domain/repository"
+	iMediaService "tg-downloader/src/features/media/domain/service"
+
+	potTokenRepo "tg-downloader/src/features/pottoken/data/repository"
+	iPotTokenRepo "tg-downloader/src/features/pottoken/domain/repository"
 	systemRepo "tg-downloader/src/features/system/data/repository"
 	iSystemRepo "tg-downloader/src/features/system/domain/repository"
-	mediaRepo "tg-downloader/src/features/media/data/repository"
-	iMediaRepo "tg-downloader/src/features/media/domain/repository"
-	videoRepo "tg-downloader/src/features/video/data/repository"
-	iVideoRepo "tg-downloader/src/features/video/domain/repository"
-	videoService "tg-downloader/src/features/video/domain/service"
 
 	"entgo.io/ent/dialect/sql"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -101,32 +103,32 @@ func NewSystemRepository() iSystemRepo.ISystemRepository {
 	return systemRepo.NewSystemRepository()
 }
 
-func NewBotService(botRepo i.IBotRepository, cacheRepo i.IBotCacheRepository, systemRepo iSystemRepo.ISystemRepository, cfg env.TGDownloader, logger *logger.Logger) service.IBotService {
-	return service.NewBotService(botRepo, cacheRepo, systemRepo, cfg, logger)
+func NewPOTokenChecker(cfg env.TGDownloader, lc fx.Lifecycle, log *logger.Logger) iPotTokenRepo.IPOTokenChecker {
+	return potTokenRepo.NewPOTokenChecker(cfg, lc, log)
+}
+
+func NewBotService(botRepo i.IBotRepository, cacheRepo i.IBotCacheRepository, systemRepo iSystemRepo.ISystemRepository, potTokenChecker iPotTokenRepo.IPOTokenChecker, cfg env.TGDownloader, logger *logger.Logger) service.IBotService {
+	return service.NewBotService(botRepo, cacheRepo, systemRepo, potTokenChecker, cfg, logger)
 }
 
 func NewTaskRepository(database *ent.Client) i.ITaskRepository {
 	return repository.NewTaskRepository(database)
 }
 
-func NewVideoDownloadRepository(cfg env.TGDownloader, log *logger.Logger) iVideoRepo.IVideoDownloadRepository {
-	return videoRepo.NewVideoDownloadRepository(cfg, log)
-}
-
-func NewUploadRepository(botApi *tgbotapi.BotAPI, cfg env.TGDownloader) iVideoRepo.IUploadRepository {
-	return videoRepo.NewUploadRepository(botApi, cfg.VideoDownloaderConfiguration.UploadTimeoutSeconds)
+func NewMediaDownloadRepository(cfg env.TGDownloader, log *logger.Logger) iMediaRepo.IMediaDownloadRepository {
+	return mediaRepo.NewMediaDownloadRepository(cfg, log)
 }
 
 func NewMediaUploadRepository(botApi *tgbotapi.BotAPI, cfg env.TGDownloader) iMediaRepo.IMediaUploadRepository {
 	return mediaRepo.NewMediaUploadRepository(botApi, cfg.VideoDownloaderConfiguration.UploadTimeoutSeconds)
 }
 
-func NewVideoService(cfg env.TGDownloader, taskRepo i.ITaskRepository, downloadRepo iVideoRepo.IVideoDownloadRepository, uploadRepo iVideoRepo.IUploadRepository, mediaUploadRepo iMediaRepo.IMediaUploadRepository, logger *logger.Logger) videoService.IVideoService {
-	return videoService.NewVideoService(cfg, taskRepo, downloadRepo, uploadRepo, mediaUploadRepo, logger)
+func NewMediaService(cfg env.TGDownloader, taskRepo i.ITaskRepository, downloadRepo iMediaRepo.IMediaDownloadRepository, mediaUploadRepo iMediaRepo.IMediaUploadRepository, logger *logger.Logger) iMediaService.IMediaService {
+	return mediaService.NewMediaService(cfg, taskRepo, downloadRepo, mediaUploadRepo, logger)
 }
 
-func NewBotController(botService service.IBotService, videoService videoService.IVideoService, logger *logger.Logger) controller.IBotController {
-	return controller.NewBotController(botService, videoService, logger)
+func NewBotController(botService service.IBotService, mediaSvc iMediaService.IMediaService, logger *logger.Logger) controller.IBotController {
+	return controller.NewBotController(botService, mediaSvc, logger)
 }
 
 // NewLoggerStrategies creates a list of logger strategies.
