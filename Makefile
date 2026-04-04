@@ -24,6 +24,7 @@ config-gen:
 
 install:
 	go mod download
+	go mod tidy
 
 build:
 	go build -o build/tg-downloader .
