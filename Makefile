@@ -20,7 +20,7 @@ config-gen:
 
 	pkl eval config/Config.pkl
 
-	go tool pkl-gen-go config/Config.pkl
+	go tool pkl-gen-go config/templates/TgDownloaderConfig.pkl
 
 install:
 	go mod download
