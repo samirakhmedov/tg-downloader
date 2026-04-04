@@ -69,7 +69,7 @@ echo "[3/16] Installing Pkl CLI ${PKL_VERSION} and pkl-gen-go..."
 curl -L -o /usr/local/bin/pkl \
     "https://github.com/apple/pkl/releases/download/${PKL_VERSION}/pkl-linux-amd64"
 chmod +x /usr/local/bin/pkl
-GOBIN=/usr/local/bin go install github.com/apple/pkl-go/cmd/pkl-gen-go@latest
+GOBIN=/usr/local/bin go install github.com/apple/pkl-go/cmd/pkl-gen-go@v0.12.1
 
 # ---------------------------------------------------------------------------
 # Step 4 — Install Node.js 20 LTS via NodeSource
