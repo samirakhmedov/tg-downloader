@@ -14,4 +14,10 @@ type PlatformInfo struct {
 
 	// ExtractorArgs is the list of platform-specific extractor arguments from the matched pattern.
 	ExtractorArgs []string
+
+	// Username for site authentication (optional, per-platform).
+	Username *string
+
+	// Password for site authentication (optional, per-platform).
+	Password *string
 }

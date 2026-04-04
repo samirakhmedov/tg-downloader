@@ -77,6 +77,12 @@ class SupportedLinkPattern {
 
   /// Platform-specific extractor arguments (e.g., "youtube:player_client=android_sdkless")
   extractorArgs: Listing<String>
+
+  /// Username for site authentication (passed as --username to yt-dlp)
+  username: String?
+
+  /// Password for site authentication (passed as --password to yt-dlp)
+  password: String?
 }
 
 /// Command configuration for bot interactions

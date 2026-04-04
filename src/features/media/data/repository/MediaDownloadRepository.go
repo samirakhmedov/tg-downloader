@@ -75,6 +75,8 @@ func (r *MediaDownloadRepository) ValidateURL(url string) (bool, entity.Platform
 				Name:          linkPattern.Name,
 				Strategies:    linkPattern.Strategies,
 				ExtractorArgs: linkPattern.ExtractorArgs,
+				Username:      linkPattern.Username,
+				Password:      linkPattern.Password,
 			}, nil
 		}
 	}
@@ -158,6 +160,13 @@ func (r *MediaDownloadRepository) DownloadMedia(url string, outputDir string, pl
 		cmd = strat.Apply(cmd)
 		// Apply global options (IPv4, sleep, headers, generic extractorArgs) second
 		cmd = r.applyYtdlpOptions(cmd)
+		// Apply per-platform authentication credentials
+		if platform.Username != nil && *platform.Username != "" {
+			cmd = cmd.Username(*platform.Username)
+		}
+		if platform.Password != nil && *platform.Password != "" {
+			cmd = cmd.Password(*platform.Password)
+		}
 
 		if err := r.runYtdlp(cmd, url); err != nil {
 			lastErr = err
