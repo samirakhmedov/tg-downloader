@@ -64,7 +64,7 @@ echo 'export PATH=/usr/local/go/bin:$PATH' > /etc/profile.d/golang.sh
 # ---------------------------------------------------------------------------
 # Step 3 — Install Pkl CLI (pinned to 0.28.0 matching Dockerfile ARG)
 # ---------------------------------------------------------------------------
-PKL_VERSION="0.28.0"
+PKL_VERSION="0.29.0"
 echo "[3/16] Installing Pkl CLI ${PKL_VERSION} and pkl-gen-go..."
 curl -L -o /usr/local/bin/pkl \
     "https://github.com/apple/pkl/releases/download/${PKL_VERSION}/pkl-linux-amd64"
